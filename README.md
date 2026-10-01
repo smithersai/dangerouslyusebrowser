@@ -37,4 +37,4 @@ DUB_BROWSER=/path/to/dub-chromium dub serve --port 7777
 
 Dub defaults to a separate persistent profile and a loopback listener. Explicit profile selection gives the agent that profile's authority. Actions run without confirmation prompts.
 
-See the [visual build plan](docs/plan.html), [implementation contract](docs/spec.md), [native seam census](docs/seams.md), [decisions](docs/decisions.md), [build plan](docs/build.md), [acceptance gates](docs/acceptance.md), and [original target examples](docs/target-examples.md).
+See the [visual build plan](docs/plan.html), [implementation contract](docs/spec.md), [native seam census](docs/seams.md), [decisions](docs/decisions.md), [build plan](docs/build.md), [first-build integration](docs/first-build.md), [acceptance gates](docs/acceptance.md), and [original target examples](docs/target-examples.md).

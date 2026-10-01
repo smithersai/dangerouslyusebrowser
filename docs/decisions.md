@@ -33,3 +33,11 @@ Use jj in a colocated repository. Commit specs, decisions and verified implement
 The user requested a subagent to find a purchasable bare-metal option and planning work meanwhile. Keep the original build/launch goal active, but focus current work on the source-backed seam census, build sequence and acceptance gates until the build environment is settled. Do not rent or provision a server on the strength of a recommendation. Provider commercial details remain private.
 
 The source census confirms V8 Date uses a platform clock and Blink virtual time uses a process override. The planned clock seam therefore includes page-owned scheduling and an execution-context-aware V8 clock hook, with an early same-renderer isolation spike. Shared/service workers need independent domains because multiple tabs can own them. This is a design to prove in the compiled fork, not a finished implementation.
+
+## 2026-09-30: first-build lifecycle and profile scope
+
+Integrate the initial overlay into `chrome/browser:core`, whose pinned source list owns `chrome_browser_main.cc`. Start at the end of `PostBrowserStart` and invalidate requests before desktop `PostMainMessageLoopRun` teardown. GN and runtime behavior still need verification on the builder.
+
+A serving session owns a selected profile independent of window activation. Keep the process and that regular profile alive when the last window closes, and reopen through Chromium's navigation facilities. Explicit quit still ends the session. An attachment never owns browser termination. Handshake build/profile/instance identity before exposing a capability-derived command catalog.
+
+Bound native completion as well as socket IO. Add optional request `timeoutMs` with a 30-second default and five-minute maximum, a finite pending registry, and one terminal completion per request. Shutdown invalidates callbacks and releases connections before profile destruction. Timeout or disconnect does not imply an action was rolled back and never triggers an automatic retry. The detailed requirements and source references are in [first-build.md](first-build.md); none are claimed implemented by this decision.

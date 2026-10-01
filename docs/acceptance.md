@@ -23,6 +23,8 @@ Stages B–E share one builder. Do not finish a polished launch page before the 
 | BRIDGE-01 | MCP initialize/list/call reaches the pinned fork; stock Chrome and mismatched protocol are rejected |
 | BRIDGE-02 | Two clients share tabs/rules/clock state; one client disconnecting does not stop the session |
 | BRIDGE-03 | Browser crash, native request timeout, frame destruction and shutdown yield bounded failures and no orphan browser |
+| BRIDGE-04 | Close the last window, retain the selected profile/session, then open a new tab; another profile becoming active cannot change scope |
+| BRIDGE-05 | Stalled requests reach the connection limit and expire, restoring capacity; shutdown/disconnect releases pending work and preserves any replacement socket |
 | NET-01 | Mock/block/redirect/patch in a top-level navigation and ordinary fetch; selected status/headers/body are actually received |
 | NET-02 | Dedicated worker, shared worker and service-worker outbound fetch before and after a rule update |
 | NET-03 | Service-worker synthetic Response, CacheStorage reply, HTTP disk cache and Blink memory-cache hit |
@@ -51,6 +53,8 @@ Stages B–E share one builder. Do not finish a polished launch page before the 
 ## Tests already executed
 
 `npm run build:native`, `npm run build`, and `npm test` passed on the initial local checkpoint. Eleven tests cover compiled native framing, fragmentation/UTF-8, concurrency, whole-call deadlines, invalid lengths/inputs, SDK envelope identity, real MCP client routing through incur to a protocol fixture, native error propagation, input validation and HTTP host/origin/token handling. These tests do not satisfy any gate that requires a real browser.
+
+The [first-build plan](first-build.md) defines the GN/lifecycle patch points and bounded-request contract for Stage A. These are planned requirements, not completed browser tests.
 
 ## API decisions to finish during implementation
 
