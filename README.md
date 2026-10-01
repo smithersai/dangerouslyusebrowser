@@ -1,90 +1,40 @@
-# DangerouslyUseBrowser
+# Dub — DangerouslyUseBrowser
 
-Dub is a Chromium fork that gives agents direct control of the browser's internals. You run `dub serve`, and any LLM connects to it over MCP.
-
-> **Status: spec only. Nothing below is built yet.** The commands are the target API.
+A Chromium fork that gives agents direct access to browser internals through native N-API bindings and an [incur](https://github.com/wevm/incur) MCP server.
 
 ```
- Chromium fork            dub core                 dub serve (incur)
-┌──────────────┐  C ABI  ┌──────────────┐  calls  ┌──────────────────┐  MCP over HTTP
-│ C++ patches  │◄───────►│ Zig/Rust/C++ │◄───────►│ typed commands   │◄──────────────── LLMs
-│ at any seam  │   FFI   │ one handle   │         │ /mcp endpoint    │
-└──────────────┘         └──────────────┘         └──────────────────┘
+Agent → dub serve /mcp → incur → TypeScript → N-API → forked Chromium
 ```
 
-Dub is a true fork. We write Zig, Rust, or C++ against any part of Chromium, so there is no protocol ceiling.
+**In development.** The native addon and MCP bridge pass 11 tests. The Chromium overlay is a draft and has not been compiled. There is no installable browser release yet.
 
-## Why "dangerously"
+The three launch demos are:
 
-`dub` works the way `--dangerously-skip-permissions` works. It runs without confirmation prompts, it can use your real signed-in profile, and it can change anything the browser sees, sends, or believes. Give it a separate profile unless you mean it.
+1. **Rewrite the network.** Mock an API response, patch a live JS bundle, and inspect traffic across tabs and workers.
+2. **Control time.** Freeze one tab, advance 31 days, or step an animation by one frame.
+3. **Act as you.** Use a persistent profile, Chromium's native actor tools, and page-registered WebMCP tools.
 
-## Run
+These remain release requirements; the bridge tests do not prove the demos work.
+
+## Develop
+
+Node 22+ and a C++ compiler with Node headers, on Linux or macOS:
 
 ```sh
-npm i -g dangerouslyusebrowser
-dub serve --port 7777                  # starts the browser and serves MCP at /mcp
-
-# Connect any MCP client
-claude mcp add --transport http dub http://localhost:7777/mcp
+npm ci
+npm run build:native
+npm run build
+npm test
+node bin/dub.mjs --help
 ```
 
-Every `dub` command below is also an MCP tool on that server. The browser stays up between calls, so tabs, clocks, and rewrites persist across an agent's session.
-
-## 1. Rewrite the network
-
-Mock, block, or rewrite any request or response in every tab, worker, and service worker, before the page sees it.
+Once the fork is built, the target launch command is:
 
 ```sh
-# Point the production frontend at a fake API
-dub net rewrite --match 'https://api.acme.com/v1/user' --status 200 --body ./fixtures/admin-user.json
-
-# Hot-patch a live JS bundle to test a fix without deploying
-dub net patch --match '*/static/app.*.js' --replace 'retries:0' --with 'retries:3'
-
-# Watch what changed
-dub net log --match 'api.acme.com' --follow
+DUB_BROWSER=/path/to/dub-chromium dub serve --port 7777
+# MCP endpoint: http://127.0.0.1:7777/mcp
 ```
 
-Use it to test frontends against any backend state, reproduce a customer bug, or try a fix on the real site in seconds.
+Dub defaults to a separate persistent profile and a loopback listener. Explicit profile selection gives the agent that profile's authority. Actions run without confirmation prompts.
 
-## 2. Control the clock
-
-Freeze, jump, and step time for one tab: `Date`, `performance.now()`, timers, and animations.
-
-```sh
-# Test the "your trial ends in 30 days" flow in two seconds
-dub clock freeze --tab 1 --at 2026-01-01T09:00:00Z
-dub clock advance --tab 1 --by 31d
-dub screenshot --tab 1 --out trial-expired.png
-
-# Step animations one frame at a time for deterministic screenshots
-dub clock step --tab 1 --frames 1
-```
-
-Use it to test expiry, scheduling, and session-timeout logic, and to make screenshots repeatable.
-
-## 3. Act as you
-
-Attach to your real profile and drive it with Chromium's own agent tools, plus any tools the page registers through WebMCP.
-
-```sh
-dub profile attach --name Default
-dub tools list --tab 1
-# → actor.click  actor.type  actor.navigate  actor.upload_file  actor.switch_tab ...
-# → page.submit_expense  page.search_flights   (registered by the site via WebMCP)
-
-dub tools call --tab 1 page.submit_expense --input '{"amount":42.10,"memo":"team lunch"}'
-dub tools call --tab 1 actor.click --input '{"target":"Approve"}'
-```
-
-Use it to let an agent finish real work in the accounts you already use. This is the most dangerous capability, because every action runs as you.
-
-## Where each capability hooks in
-
-| Capability | Chromium seam |
-| --- | --- |
-| Rewrite the network | `content/public/browser/url_loader_request_interceptor.h`, in the browser process, for all tabs and workers |
-| Control the clock | `base/time/time_override.h`, plus a per-tab clock |
-| Act as you | `chrome/browser/actor/tools` (click, type, navigate, tabs, upload) and the `WebMCP` DevTools domain |
-
-Seams verified against Chromium 157.0.8082.0.
+See the [visual build plan](docs/plan.html), [implementation contract](docs/spec.md), [native seam census](docs/seams.md), [decisions](docs/decisions.md), [build plan](docs/build.md), [acceptance gates](docs/acceptance.md), and [original target examples](docs/target-examples.md).

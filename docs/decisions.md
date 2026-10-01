@@ -27,3 +27,9 @@ Validate the fork's protocol and capabilities before serving tools. Missing bina
 ## 2026-09-30: version control and evidence
 
 Use jj in a colocated repository. Commit specs, decisions and verified implementation chunks as work proceeds. Keep main current and push main; no persistent side branches. Browser behavior requires receipts from the compiled fork, with source revision and command recorded. Incomplete work remains tracked in [plue#777](https://github.com/smithersai/plue/issues/777).
+
+## 2026-09-30: planning checkpoint before the Chromium build host
+
+The user requested a subagent to find a purchasable bare-metal option and planning work meanwhile. Keep the original build/launch goal active, but focus current work on the source-backed seam census, build sequence and acceptance gates until the build environment is settled. Do not rent or provision a server on the strength of a recommendation. Provider commercial details remain private.
+
+The source census confirms V8 Date uses a platform clock and Blink virtual time uses a process override. The planned clock seam therefore includes page-owned scheduling and an execution-context-aware V8 clock hook, with an early same-renderer isolation spike. Shared/service workers need independent domains because multiple tabs can own them. This is a design to prove in the compiled fork, not a finished implementation.

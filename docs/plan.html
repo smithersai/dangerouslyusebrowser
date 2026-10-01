@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dub — build plan</title>
+<style>
+:root{color-scheme:dark;--bg:#101111;--panel:#191b1b;--line:#353939;--ink:#f0f0e8;--muted:#a9b4ad;--orange:#ffb25b;--green:#9cdcaa}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,sans-serif}main{max-width:1060px;margin:0 auto;padding:56px 24px 80px}h1{font-size:clamp(40px,7vw,76px);line-height:1;margin:12px 0 24px;letter-spacing:-.045em}h2{font-size:27px;margin:44px 0 16px}h3{margin:0 0 8px;font-size:19px}p{max-width:82ch}a{color:var(--orange)}.eyebrow{font:12px ui-monospace,monospace;text-transform:uppercase;letter-spacing:.13em;color:var(--orange)}.lede{font-size:22px;color:var(--muted)}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.card{padding:22px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}.card p{margin:8px 0 0;color:var(--muted)}.tag{font:12px ui-monospace,monospace;color:var(--orange);text-transform:uppercase}.pass{color:var(--green)}.notice{border-left:3px solid var(--orange);padding:10px 18px;background:var(--panel);margin:26px 0}.diagram{overflow:auto;padding:24px;border:1px solid var(--line);background:var(--panel);font:14px/1.7 ui-monospace,monospace}.table{overflow:auto}table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;vertical-align:top;padding:14px 12px;border-bottom:1px solid var(--line)}th{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.07em}td:first-child{white-space:nowrap;font-weight:650}details{padding:17px 0;border-bottom:1px solid var(--line)}summary{cursor:pointer;font-size:18px;font-weight:650}details p{color:var(--muted)}code{font-family:ui-monospace,monospace;font-size:.9em}footer{margin-top:48px;color:var(--muted);font-size:13px}.muted{color:var(--muted)}@media(max-width:720px){.grid{grid-template-columns:1fr}main{padding:32px 18px}th,td{padding:10px 8px}.lede{font-size:19px}}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">DangerouslyUseBrowser / Engineering plan / 30 September 2026</div>
+<h1>Dub. Native all the way in.</h1>
+<p class="lede">Fork Chromium. Bind its internals through N-API. Give agents one persistent incur MCP server.</p>
+<div class="notice"><strong>Current checkpoint:</strong> native binding compiled and 11 bridge/MCP tests passed. The Chromium dispatcher is a draft. No fork binary or working launch demo has been verified. Work is currently focused on planning while a build server is selected.</div>
+<div class="grid">
+<section class="card"><span class="tag">Demo 01</span><h3>Rewrite the network</h3><p>Mock the API, patch a live JS bundle, inspect the affected traffic—including workers and service-worker responses.</p></section>
+<section class="card"><span class="tag">Demo 02</span><h3>Control the clock</h3><p>Freeze one tab, advance 31 days, then step an animation exactly one frame. Other tabs keep their own time.</p></section>
+<section class="card"><span class="tag">Demo 03</span><h3>Act as you</h3><p>Use a persistent profile, native Chromium actor tools and tools the page registers through WebMCP.</p></section>
+</div>
+<h2>The architecture</h2>
+<pre class="diagram">LLM / command line
+        |
+  dub serve :7777/mcp        persistent session; incur schemas
+        |
+  typed TypeScript SDK
+        |
+  N-API addon -> C ABI       asynchronous native calls; no V8 ABI coupling
+        |
+  private local socket      versioned messages; bounded sizes and deadlines
+        |
+  Chromium browser C++      tabs, profiles, native actor delegates
+        |
+        +-- Mojo --> network service + service-worker response seams
+        +-- Mojo --> Blink / V8 / per-page clock domains
+        +-- Mojo --> actor executor / WebMCP model contexts
+</pre>
+<p>The browser remains a separately sandboxed process tree. Node does not host Chromium's UI loop or V8 runtime. A missing fork is an error; there is no fallback browser. The native protocol can grow with new fork seams.</p>
+<h2>Two assumptions the source disproved</h2>
+<details open><summary>A navigation interceptor does not cover the network</summary><p>The original proposed header explicitly describes navigation requests. A network-service proxy covers ordinary network traffic, but service workers can return synthetic or cached responses without reaching it. The implementation needs those response paths too, plus an audit of memory-cache delivery. Tests distinguish each origin of a response.</p></details>
+<details open><summary>Existing virtual time does not establish tab isolation</summary><p>The current controller is tied to a thread scheduler; its coordinator installs a process-wide clock override. The planned fork needs page-owned timer domains, coherent performance/animation clocks, and context-aware V8 Date handling. The early spike must freeze one of two tabs sharing a renderer and prove the other still advances normally.</p></details>
+<details><summary>WebMCP discovery and invocation have lifecycles</summary><p>At this source revision there is no WebMCP <code>listTools</code> command. Enabling the domain emits tool registration events. Invocation returns an ID before the tool response arrives. Dub needs a live, frame-aware catalog and completion/cancellation handling; returning an invocation ID is not tool completion.</p></details>
+<h2>Build in this order</h2>
+<div class="table"><table>
+<thead><tr><th>Stage</th><th>Deliverable</th><th>Gate to continue</th></tr></thead>
+<tbody>
+<tr><td>A · Native slice</td><td>GN/startup integration, status, tabs, one actor click</td><td>Actual MCP client reaches a compiled fork through the real addon and produces a native page interaction.</td></tr>
+<tr><td>B · Risk spikes</td><td>Independent page clock; synthetic service-worker response interception</td><td>Shared-renderer and synthetic-response tests pass. Resolve these before filling out wrappers.</td></tr>
+<tr><td>C · Network</td><td>Live policy, decoded-body patches, logs and recovery</td><td>Navigation, workers, caches, redirect/cancellation and restart matrix passes.</td></tr>
+<tr><td>D · Time</td><td>Freeze, advance, frame step, resume</td><td>Date, performance, timers and animation agree; unrelated tabs and browser deadlines remain correct.</td></tr>
+<tr><td>E · Tools</td><td>Native actor targeting/upload and WebMCP catalog/invocation</td><td>Actual native events, uploaded fixture bytes, live tool registration and completed page-tool output.</td></tr>
+<tr><td>F · Install</td><td>Profile lifecycle, complete browser archive, checksums, package</td><td>Fresh-machine install runs all tests and preserves the profile across restart.</td></tr>
+<tr><td>G · Launch</td><td>Three demos, concise README, video/screenshots and tweet draft</td><td>Every claim has a matching receipt from the distributable build.</td></tr>
+</tbody></table></div>
+<h2>What has evidence today</h2>
+<div class="table"><table><thead><tr><th>Layer</th><th>Status</th><th>Evidence / remaining work</th></tr></thead><tbody>
+<tr><td>C ABI / N-API</td><td class="pass">Compiled; tests pass</td><td>Framing, fragmented UTF-8, concurrency, deadlines, invalid input and truncated/oversized responses.</td></tr>
+<tr><td>SDK / incur MCP</td><td class="pass">Fixture integration passes</td><td>Real MCP client calls incur, the typed SDK and compiled addon. Browser side is explicitly a protocol fixture.</td></tr>
+<tr><td>Chromium overlay</td><td>Draft</td><td>Native listener/dispatcher source exists. GN integration, compile and runtime verification remain.</td></tr>
+<tr><td>Network / time</td><td>Planned</td><td>Source seams and proof requirements mapped; fork handlers not implemented.</td></tr>
+<tr><td>Actor / WebMCP</td><td>Partial draft</td><td>Renderer invocation source drafted; full browser delegates, upload and live discovery remain.</td></tr>
+<tr><td>Release artifacts</td><td>Missing</td><td>No compiled browser distribution, clean install, demo recording or verified launch claim.</td></tr>
+</tbody></table></div>
+<h2>One builder, exact receipts</h2>
+<p>Start with Linux x86-64, 128 GB RAM and at least 500 GB usable NVMe. One builder owns the source/output tree. Keep upstream source outside the Dub repository, pin Chromium and DEPS, apply checked overlays, and sync exact <code>jj</code> commits on <code>main</code>. Record build logs, toolchain, GN arguments, tests and artifact checksums together. Hardware quotes and server access stay private.</p>
+<p>Do not forecast compile time as a measured result. Record the first clean and incremental builds on the purchased host. macOS binding success is separate from a macOS browser release.</p>
+<h2>Durable engineering documents</h2>
+<p><a href="spec.md">Original contract</a> · <a href="seams.md">Eight native seam cards</a> · <a href="decisions.md">Decisions</a> · <a href="build.md">Builder procedure</a> · <a href="acceptance.md">Acceptance matrix</a> · <a href="target-examples.md">Original target examples</a></p>
+<footer>Chromium 157.0.8082.0 · pinned revision <code>0e331aaf43bf5e1ffe16e65140de2d925c18f0a2</code>.<br>This checkpoint is a plan and evidence inventory, not a release announcement.</footer>
+</main></body></html>

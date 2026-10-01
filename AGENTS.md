@@ -1,5 +1,7 @@
 # Dub
 
+Use jj to commit verified chunks, specifications and decisions as work proceeds. Keep the main bookmark current and push main.
+
 Work on main. Dub is a real Chromium fork, with a native N-API bridge and typed incur commands. Do not replace it with Playwright, a stock-CDP server, or a CEF/Electron product. Native seams may use existing Chromium facilities where appropriate, but must be extensible inside the fork.
 
 Keep Chromium pinned in chromium/revision.json; apply the overlay with scripts/chromium.mjs. Upstream source stays outside this repository. Every advertised capability needs a test against the actual compiled Dub browser. Transport fixtures prove the native bridge only, not browser behavior. Never call an unbuilt overlay verified or present a speculative demo as a working feature.
