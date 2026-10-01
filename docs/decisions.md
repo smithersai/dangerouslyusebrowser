@@ -1,0 +1,29 @@
+# Engineering decisions
+
+## 2026-09-30: preserve the fork
+
+The deliverable is Chromium source with native seams, not a CDP automation package. Keep the upstream revision and reproducible overlay in this repository rather than importing Chromium's enormous history. Build from the pinned source plus that overlay. Ordinary Chromium facilities may be reused internally; access is not limited to the public protocol.
+
+## 2026-09-30: N-API over a C ABI, out of process
+
+The Node module exports an asynchronous request API backed by a small C ABI. It talks to a fork-only local endpoint. Chromium runs separately because its process model, UI loop, V8 instance and sandbox must not be embedded into Node's runtime. Native browser dispatch runs on Chromium's UI thread; renderer and network operations cross their normal Mojo boundaries. No remote-debugging port is required.
+
+IPC protocol version 1: one request and one response per AF_UNIX connection, each prefixed by a four-byte unsigned big-endian byte length. Messages are UTF-8 JSON, 1 byte to 16 MiB. Requests contain `{protocol:1, id, method, params}`. Responses echo `id` and contain either `result` or `{error:{code,message}}`. IDs are strings. Enforce a whole-call deadline, not a timeout that resets with each byte. No retries of potentially side-effecting commands.
+
+The caller owns buffers returned by `dub_call` and releases them with `dub_free`. N-API queues blocking native IO off the Node event loop. Native builds use N-API version 8, avoiding Node/V8-version-specific ABI coupling. Initial targets are Linux and macOS; do not claim Windows support until there is an implemented named-pipe transport and build receipt.
+
+## 2026-09-30: network interception belongs below target attachment
+
+The original proposed `content/public/browser/url_loader_request_interceptor.h` explicitly covers navigation requests. It cannot prove all-target interception. Implement global network rules at the network service, using Mojo to update policy and receive bounded logs. Separately audit responses synthesized by service workers, memory/disk caches, and non-HTTP loaders. Do not claim these are covered by a network-service-only hook without tests.
+
+## 2026-09-30: time must be scoped and engine-aware
+
+A process-wide `base::subtle::ScopedTimeClockOverrides` is not per-tab time. It can perturb Chromium bookkeeping and other tabs. Use Blink scheduling/virtual-time mechanisms with explicit ownership and verify render-process sharing. Preserve Date, monotonic time, timers and animation coherence; do not fake the feature with a Date shim.
+
+## 2026-09-30: no silent backend substitution
+
+Validate the fork's protocol and capabilities before serving tools. Missing binaries, missing capabilities and native dispatch failures are errors. Fixtures are permitted for bridge/protocol tests and are labeled as such; they cannot satisfy the browser release gates.
+
+## 2026-09-30: version control and evidence
+
+Use jj in a colocated repository. Commit specs, decisions and verified implementation chunks as work proceeds. Keep main current and push main; no persistent side branches. Browser behavior requires receipts from the compiled fork, with source revision and command recorded. Incomplete work remains tracked in [plue#777](https://github.com/smithersai/plue/issues/777).
