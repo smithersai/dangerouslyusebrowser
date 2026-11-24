@@ -9,6 +9,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  utimesSync,
   writeFileSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
@@ -91,6 +92,7 @@ function parseArgs(argv) {
     sccache: 'auto',
     noApply: false,
     jobs: undefined,
+    dest: resolve(REPO_ROOT, 'dist-release'),
   };
   for (let i = 1; i < argv.length; i++) {
     const arg = argv[i];
@@ -100,6 +102,7 @@ function parseArgs(argv) {
     else if (arg === '--profile') opts.profile = argv[++i];
     else if (arg === '--sccache') opts.sccache = argv[++i];
     else if (arg === '--jobs' || arg === '-j') opts.jobs = argv[++i];
+    else if (arg === '--dest') opts.dest = resolve(argv[++i]);
     else if (arg === '--no-apply') opts.noApply = true;
     else throw new Error(`Unknown argument: ${arg}`);
   }
@@ -129,6 +132,17 @@ function parseDirtyPaths(srcDir) {
   return dirty;
 }
 
+function revertPatchedFiles(srcDir, files, opts = {}) {
+  const rootFiles = [];
+  const v8Files = [];
+  for (const f of files) {
+    if (f.startsWith('v8/')) v8Files.push(f.slice(3));
+    else rootFiles.push(f);
+  }
+  if (rootFiles.length > 0) git(srcDir, ['checkout', '--', ...rootFiles], opts);
+  if (v8Files.length > 0) git(join(srcDir, 'v8'), ['checkout', '--', ...v8Files], opts);
+}
+
 function revertExistingOverlay(srcDir) {
   const manifestPath = join(srcDir, MANIFEST_FILENAME);
   if (!existsSync(manifestPath)) {
@@ -153,7 +167,7 @@ function revertExistingOverlay(srcDir) {
     );
   }
   if (knownPatched.size > 0) {
-    git(srcDir, ['checkout', '--', ...knownPatched]);
+    revertPatchedFiles(srcDir, knownPatched);
   }
   for (const rel of knownOverlay) {
     const target = join(srcDir, rel);
@@ -273,6 +287,14 @@ function applyOverlay(srcDir, { dryRun = false } = {}) {
     }
     patchedFiles = new Set(prevManifest.patchedFiles || []);
   } else {
+    const prevPatchedMeta = new Map();
+    for (const rel of prevManifest?.patchedFiles || []) {
+      const full = join(srcDir, rel);
+      if (existsSync(full)) {
+        const st = statSync(full);
+        prevPatchedMeta.set(rel, { sha: sha256File(full), atime: st.atime, mtime: st.mtime });
+      }
+    }
     revertExistingOverlay(srcDir);
     const stillDirty = parseDirtyPaths(srcDir);
     if (stillDirty.length > 0) {
@@ -286,9 +308,16 @@ function applyOverlay(srcDir, { dryRun = false } = {}) {
         git(srcDir, ['apply', patchPath]);
         for (const f of extractPatchedFiles(patchText)) patchedFiles.add(f);
       }
+      for (const rel of patchedFiles) {
+        const prev = prevPatchedMeta.get(rel);
+        const full = join(srcDir, rel);
+        if (prev && existsSync(full) && sha256File(full) === prev.sha) {
+          utimesSync(full, prev.atime, prev.mtime);
+        }
+      }
     } catch (err) {
       if (patchedFiles.size > 0) {
-        git(srcDir, ['checkout', '--', ...patchedFiles], { allowFail: true });
+        revertPatchedFiles(srcDir, patchedFiles, { allowFail: true });
       }
       throw err;
     }
@@ -429,11 +458,87 @@ function fetchChromium(opts) {
   run('gclient', ['runhooks'], { cwd: rootDir });
 }
 
+function packageChromium(opts) {
+  const rev = readRevision();
+  const outDir = resolve(opts.src, opts.out);
+  const chromeBin = join(outDir, 'chrome');
+  if (!existsSync(chromeBin)) {
+    throw new Error(`Compiled chrome binary not found at ${chromeBin}. Run build first.`);
+  }
+  const arch = process.arch === 'x64' ? 'x64' : process.arch;
+  const plat = process.platform;
+  const bundleName = `dub-chromium-${rev.version}-${plat}-${arch}`;
+  const stageDir = join(opts.dest, bundleName);
+  rmSync(stageDir, { recursive: true, force: true });
+  mkdirSync(stageDir, { recursive: true });
+
+  const entries = readdirSync(outDir, { withFileTypes: true });
+  for (const entry of entries) {
+    const name = entry.name;
+    const isRuntime =
+      name === 'chrome' ||
+      name === 'chrome_crashpad_handler' ||
+      name === 'chrome_sandbox' ||
+      name === 'icudtl.dat' ||
+      name === 'v8_context_snapshot.bin' ||
+      name === 'snapshot_blob.bin' ||
+      name === 'vk_swiftshader_icd.json' ||
+      name.endsWith('.so') ||
+      name.includes('.so.') ||
+      name.endsWith('.pak');
+    if (entry.isFile() && isRuntime) {
+      copyFileSync(join(outDir, name), join(stageDir, name));
+    }
+  }
+  // Copy locales/ and MEIPreload/ if present
+  for (const sub of ['locales', 'MEIPreload']) {
+    const subSrc = join(outDir, sub);
+    if (existsSync(subSrc)) {
+      const subDst = join(stageDir, sub);
+      mkdirSync(subDst, { recursive: true });
+      for (const f of walkFiles(subSrc)) {
+        const dst = join(subDst, f);
+        mkdirSync(dirname(dst), { recursive: true });
+        copyFileSync(join(subSrc, f), dst);
+      }
+    }
+  }
+  // Copy licenses and Dub manifest
+  for (const [srcFile, dstName] of [
+    [join(REPO_ROOT, 'LICENSE'), 'LICENSE.DUB'],
+    [join(opts.src, 'LICENSE'), 'LICENSE.CHROMIUM'],
+    [join(opts.src, MANIFEST_FILENAME), 'dub-overlay-manifest.json'],
+    [join(outDir, 'dub-build-receipt.json'), 'dub-build-receipt.json'],
+  ]) {
+    if (existsSync(srcFile)) copyFileSync(srcFile, join(stageDir, dstName));
+  }
+
+  const tarballName = `${bundleName}.tar.gz`;
+  const tarballPath = join(opts.dest, tarballName);
+  run('tar', ['-czf', tarballPath, '-C', opts.dest, bundleName]);
+  const tarSha = sha256File(tarballPath);
+  const binSha = sha256File(join(stageDir, 'chrome'));
+  const checksumPath = join(opts.dest, 'SHA256SUMS.txt');
+  writeFileSync(checksumPath, `${tarSha}  ${tarballName}\n`);
+  console.log(
+    JSON.stringify(
+      {
+        tarball: tarballPath,
+        tarballSha256: tarSha,
+        chromeSha256: binSha,
+        checksums: checksumPath,
+      },
+      null,
+      2
+    )
+  );
+}
+
 function main() {
   const { action, opts } = parseArgs(process.argv.slice(2));
   if (!action || action === '--help' || action === '-h') {
     console.log(
-      'Usage: node scripts/chromium.mjs <fetch|check|apply|revert|build|status> [--src DIR] [--out out/Default] [--target chrome] [--profile dev|release] [--sccache auto|on|off]'
+      'Usage: node scripts/chromium.mjs <fetch|check|apply|revert|build|package|status> [--src DIR] [--out out/Default] [--dest dist-release] [--target chrome] [--profile dev|release] [--sccache auto|on|off]'
     );
     return;
   }
@@ -448,6 +553,7 @@ function main() {
     return;
   }
   if (action === 'build') return buildChromium(opts);
+  if (action === 'package') return packageChromium(opts);
   throw new Error(`Unknown action: ${action}`);
 }
 

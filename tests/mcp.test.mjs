@@ -2,13 +2,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createServer } from 'node:net';
 import { request as httpRequest } from 'node:http';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { once } from 'node:events';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { Browser, NativeBridge, createCommands, listen, duration } from '../dist/index.js';
+import { Browser, NativeBridge, attachProfile, createCommands, listen, duration } from '../dist/index.js';
 
 async function bridgeFixture(t, respond) {
   const dir = await mkdtemp(join(tmpdir(), 'dub-mcp-'));
@@ -110,4 +110,69 @@ test('capability handshake gates MCP tool catalog and /health reflects session s
 
   await f.browser.tabs();
   assert.equal(f.calls.at(-1).timeoutMs, 30000);
+});
+test('profile attach reports explicit ownership and net log --follow collects bounded updates', async t => {
+  const workDir = await mkdtemp(join(tmpdir(), 'dub-attach-'));
+  t.after(() => rm(workDir, { recursive: true, force: true }));
+  const profileDir = join(workDir, 'profile');
+  let pollCount = 0;
+  const f = await bridgeFixture(t, req => {
+    if (req.method === 'browser.info') {
+      return {
+        result: {
+          product: 'Dub', protocol: 1, chromium: '157.0.8082.0', revision: 'abc',
+          methods: ['browser.info', 'net.log', 'profile.info'],
+          profile: join(profileDir, 'Default'), instanceId: 'inst-1',
+        },
+      };
+    }
+    if (req.method === 'net.log') {
+      pollCount++;
+      if (pollCount === 1) {
+        return { result: { version: 1, nextSeq: 1, oldestSeq: 1, droppedCount: 0, gap: false, entries: [{ seq: 1, url: 'https://a.test' }] } };
+      }
+      return { result: { version: 1, nextSeq: 2, oldestSeq: 1, droppedCount: 0, gap: false, entries: [{ seq: 2, url: 'https://b.test' }] } };
+    }
+    return { result: {} };
+  });
+
+  // Reconnects when running Dub matches profile
+  const same = await attachProfile({ name: 'Default', dir: profileDir, socket: f.browser.native.socket });
+  assert.equal(same.status, 'reconnected');
+  assert.equal(same.requiresRestart, false);
+
+  // Reports requires_restart when running Dub owns a different profile
+  const diff = await attachProfile({ name: 'Work', dir: profileDir, socket: f.browser.native.socket });
+  assert.equal(diff.status, 'requires_restart');
+  assert.equal(diff.requiresRestart, true);
+
+  // Reports locked_by_other_process when no Dub socket is live but SingletonLock exists
+  const lockedDir = await mkdtemp(join(tmpdir(), 'dub-locked-'));
+  t.after(() => rm(lockedDir, { recursive: true, force: true }));
+  await symlink('other-host-1234', join(lockedDir, 'SingletonLock'));
+  const locked = await attachProfile({ name: 'Default', dir: lockedDir, socket: join(lockedDir, 'missing.sock') });
+  assert.equal(locked.status, 'locked_by_other_process');
+  assert.equal(locked.requiresRestart, true);
+
+  // Reports not_running when neither socket nor SingletonLock exists
+  const emptyDir = await mkdtemp(join(tmpdir(), 'dub-empty-'));
+  t.after(() => rm(emptyDir, { recursive: true, force: true }));
+  const notRunning = await attachProfile({ name: 'Default', dir: emptyDir, socket: join(emptyDir, 'missing.sock') });
+  assert.equal(notRunning.status, 'not_running');
+  assert.equal(notRunning.requiresRestart, true);
+
+  // net_log --follow polls across multiple batches up to limit
+  const server = await listen(createCommands(f.browser, { methods: ['browser.info', 'net.log'] }).fetch, { port: 0 });
+  t.after(() => server.close());
+  const client = new Client({ name: 'dub-follow', version: '1' });
+  await client.connect(new StreamableHTTPClientTransport(new URL(`${server.url}/mcp`))); t.after(() => client.close());
+  const followRes = await client.callTool({
+    name: 'net_log',
+    arguments: { follow: true, limit: 2, timeoutMs: 2000 },
+  });
+  assert.notEqual(followRes.isError, true, JSON.stringify(followRes));
+  const followed = JSON.parse(followRes.content[0].text);
+  assert.equal(followed.followed, true);
+  assert.equal(followed.entries.length, 2);
+  assert.equal(followed.nextSeq, 2);
 });

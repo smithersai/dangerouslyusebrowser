@@ -1,0 +1,702 @@
+diff --git a/v8/include/v8-isolate.h b/v8/include/v8-isolate.h
+--- a/v8/include/v8-isolate.h
++++ b/v8/include/v8-isolate.h
+@@ -793,6 +793,14 @@ class V8_EXPORT Isolate {
+   using AbortOnUncaughtExceptionCallback = bool (*)(Isolate*);
+   void SetAbortOnUncaughtExceptionCallback(
+       AbortOnUncaughtExceptionCallback callback);
++
++  /**
++   * Dub per-context virtual wall-clock callback. Returns true and populates
++   * |out_time_ms| when the active V8 context has a virtual wall clock.
++   */
++  using DubClockTimeMillisCallback = bool (*)(Isolate*, int64_t* out_time_ms);
++  void SetDubClockTimeMillisCallback(DubClockTimeMillisCallback callback);
++
+ 
+   /**
+    * This specifies the callback called by the upcoming dynamic
+diff --git a/v8/src/api/api.cc b/v8/src/api/api.cc
+--- a/v8/src/api/api.cc
++++ b/v8/src/api/api.cc
+@@ -10394,6 +10394,12 @@ void Isolate::SetAbortOnUncaughtExceptionCallback(
+   i_isolate->SetAbortOnUncaughtExceptionCallback(callback);
+ }
+ 
++void Isolate::SetDubClockTimeMillisCallback(
++    DubClockTimeMillisCallback callback) {
++  i::Isolate* i_isolate = reinterpret_cast<i::Isolate*>(this);
++  i_isolate->SetDubClockTimeMillisCallback(callback);
++}
++
+ void Isolate::SetHostImportModuleDynamicallyCallback(
+     HostImportModuleDynamicallyCallback callback) {
+   i::Isolate* i_isolate = reinterpret_cast<i::Isolate*>(this);
+diff --git a/v8/src/execution/isolate.cc b/v8/src/execution/isolate.cc
+--- a/v8/src/execution/isolate.cc
++++ b/v8/src/execution/isolate.cc
+@@ -7516,4 +7516,9 @@ void Isolate::ClearKeptObjects() { heap()->ClearKeptObjects(); }
+ 
++void Isolate::SetDubClockTimeMillisCallback(
++    v8::Isolate::DubClockTimeMillisCallback callback) {
++  dub_clock_time_millis_callback_ = callback;
++}
++
+ void Isolate::SetHostImportModuleDynamicallyCallback(
+     HostImportModuleDynamicallyCallback callback) {
+   host_import_module_dynamically_callback_ = callback;
+diff --git a/v8/src/execution/isolate.h b/v8/src/execution/isolate.h
+--- a/v8/src/execution/isolate.h
++++ b/v8/src/execution/isolate.h
+@@ -2075,6 +2075,12 @@ class V8_EXPORT_PRIVATE Isolate final : private HiddenFactory {
+ 
+   void ClearKeptObjects();
+ 
++  void SetDubClockTimeMillisCallback(
++      v8::Isolate::DubClockTimeMillisCallback callback);
++  v8::Isolate::DubClockTimeMillisCallback dub_clock_time_millis_callback()
++      const {
++    return dub_clock_time_millis_callback_;
++  }
+   void SetHostImportModuleDynamicallyCallback(
+       HostImportModuleDynamicallyCallback callback);
+   void SetHostImportModuleWithPhaseDynamicallyCallback(
+@@ -2723,6 +2728,8 @@ class V8_EXPORT_PRIVATE Isolate final : private HiddenFactory {
+   base::RandomNumberGenerator* fuzzer_rng_ = nullptr;
+   v8::Isolate::ReleaseCppHeapCallback release_cpp_heap_callback_ = nullptr;
+   PromiseHook promise_hook_ = nullptr;
++  v8::Isolate::DubClockTimeMillisCallback dub_clock_time_millis_callback_ =
++      nullptr;
+   HostImportModuleDynamicallyCallback host_import_module_dynamically_callback_ =
+       nullptr;
+   HostImportModuleWithPhaseDynamicallyCallback
+diff --git a/v8/src/objects/js-objects.cc b/v8/src/objects/js-objects.cc
+--- a/v8/src/objects/js-objects.cc
++++ b/v8/src/objects/js-objects.cc
+@@ -5892,6 +5892,13 @@ int64_t JSDate::CurrentTimeValue(Isolate* isolate) {
+   if (v8_flags.log_timer_events) LOG(isolate, CurrentTimeEvent());
+   if (v8_flags.correctness_fuzzer_suppressions) return 4;
+ 
++  if (auto cb = isolate->dub_clock_time_millis_callback()) {
++    int64_t override_ms = 0;
++    if (cb(reinterpret_cast<v8::Isolate*>(isolate), &override_ms)) {
++      return override_ms;
++    }
++  }
++
+   // According to ECMA-262, section 15.9.1, page 117, the precision of
+   // the number in a Date object representing a particular instant in
+   // time is milliseconds. Therefore, we floor the result of getting
+diff --git a/v8/src/objects/js-temporal-objects.cc b/v8/src/objects/js-temporal-objects.cc
+--- a/v8/src/objects/js-temporal-objects.cc
++++ b/v8/src/objects/js-temporal-objects.cc
+@@ -2182,6 +2182,15 @@ temporal_rs::I128Nanoseconds SystemUTCEpochNanoseconds(Isolate* isolate) {
+                                         .low = absl::Uint128Low64(ns)};
+   }
+ 
++  if (auto cb = isolate->dub_clock_time_millis_callback()) {
++    int64_t override_ms = 0;
++    if (cb(reinterpret_cast<v8::Isolate*>(isolate), &override_ms)) {
++      absl::int128 ns = absl::int128(override_ms) * 1'000'000;
++      return temporal_rs::I128Nanoseconds{.high = absl::Uint128High64(ns),
++                                          .low = absl::Uint128Low64(ns)};
++    }
++  }
++
+   double ms =
+       V8::GetCurrentPlatform()->CurrentClockTimeMillisecondsHighResolution();
+ 
+diff --git a/third_party/blink/public/web/web_local_frame.h b/third_party/blink/public/web/web_local_frame.h
+--- a/third_party/blink/public/web/web_local_frame.h
++++ b/third_party/blink/public/web/web_local_frame.h
+@@ -236,5 +236,23 @@ class BLINK_EXPORT WebLocalFrame : public WebFrame {
+   virtual WebDocument GetDocument() const = 0;
+   virtual InitiatorStateToken GetInitiatorStateToken() const = 0;
++
++  struct DubClockResult {
++    bool ok = false;
++    bool frozen = false;
++    int64_t epoch_ms = 0;
++    double performance_now_ms = 0.0;
++    uint32_t timers_fired = 0;
++    bool timers_capped = false;
++    uint32_t frames_stepped = 0;
++    WebString error_code;
++    WebString error_message;
++  };
++  virtual DubClockResult ControlDubClock(const WebString& op,
++                                         int64_t epoch_ms,
++                                         int64_t delta_ms,
++                                         uint32_t frames) {
++    return DubClockResult{};
++  }
+ 
+   // The name of this frame. If no name is given, empty string is returned.
+   virtual WebString AssignedName() const = 0;
+diff --git a/third_party/blink/renderer/core/frame/web_local_frame_impl.h b/third_party/blink/renderer/core/frame/web_local_frame_impl.h
+--- a/third_party/blink/renderer/core/frame/web_local_frame_impl.h
++++ b/third_party/blink/renderer/core/frame/web_local_frame_impl.h
+@@ -135,6 +135,10 @@ class CORE_EXPORT WebLocalFrameImpl final
+   BrowserInterfaceBrokerProxy& GetBrowserInterfaceBroker() override;
+   WebDocument GetDocument() const override;
+   InitiatorStateToken GetInitiatorStateToken() const override;
++  DubClockResult ControlDubClock(const WebString& op,
++                                 int64_t epoch_ms,
++                                 int64_t delta_ms,
++                                 uint32_t frames) override;
+   WebString AssignedName() const override;
+   ui::AXTreeID GetAXTreeID() const override;
+   void SetName(const WebString&) override;
+diff --git a/third_party/blink/renderer/core/frame/web_local_frame_impl.cc b/third_party/blink/renderer/core/frame/web_local_frame_impl.cc
+--- a/third_party/blink/renderer/core/frame/web_local_frame_impl.cc
++++ b/third_party/blink/renderer/core/frame/web_local_frame_impl.cc
+@@ -244,6 +244,7 @@
+ #include "third_party/blink/renderer/core/loader/web_associated_url_loader_impl.h"
+ #include "third_party/blink/renderer/core/messaging/blink_transferable_message.h"
+ #include "third_party/blink/renderer/core/page/context_menu_controller.h"
++#include "third_party/blink/renderer/core/page/dub_page_clock.h"
+ #include "third_party/blink/renderer/core/page/focus_controller.h"
+ #include "third_party/blink/renderer/core/page/frame_tree.h"
+ #include "third_party/blink/renderer/core/page/page.h"
+@@ -1015,6 +1016,47 @@ WebDocument WebLocalFrameImpl::GetDocument() const {
+   return WebDocument(GetFrame()->GetDocument());
+ }
+ 
++WebLocalFrame::DubClockResult WebLocalFrameImpl::ControlDubClock(
++    const WebString& op,
++    int64_t epoch_ms,
++    int64_t delta_ms,
++    uint32_t frames) {
++  DubClockResult out;
++  if (!GetFrame() || !GetFrame()->GetPage() ||
++      !GetFrame()->GetPage()->GetDubClock()) {
++    out.ok = false;
++    out.error_code = WebString::FromUtf8("PAGE_GONE");
++    out.error_message = WebString::FromUtf8("Page clock is unavailable");
++    return out;
++  }
++  DubPageClock* clock = GetFrame()->GetPage()->GetDubClock();
++  const std::string op_str = op.Utf8();
++  DubClockSnapshot snap;
++  if (op_str == "freeze") {
++    snap = clock->Freeze(epoch_ms);
++  } else if (op_str == "advance") {
++    snap = clock->Advance(delta_ms);
++  } else if (op_str == "step") {
++    snap = clock->StepFrames(frames);
++  } else if (op_str == "resume") {
++    snap = clock->Resume();
++  } else {
++    snap.ok = false;
++    snap.error_code = "INVALID_PARAMS";
++    snap.error_message = "Unknown clock op: " + op_str;
++  }
++  out.ok = snap.ok;
++  out.frozen = snap.frozen;
++  out.epoch_ms = snap.epoch_ms;
++  out.performance_now_ms = snap.performance_now_ms;
++  out.timers_fired = snap.timers_fired;
++  out.timers_capped = snap.timers_capped;
++  out.frames_stepped = snap.frames_stepped;
++  out.error_code = WebString::FromUtf8(snap.error_code);
++  out.error_message = WebString::FromUtf8(snap.error_message);
++  return out;
++}
++
+ InitiatorStateToken WebLocalFrameImpl::GetInitiatorStateToken() const {
+   CHECK(GetFrame());
+   CHECK(GetFrame()->DomWindow());
+diff --git a/third_party/blink/renderer/core/page/build.gni b/third_party/blink/renderer/core/page/build.gni
+--- a/third_party/blink/renderer/core/page/build.gni
++++ b/third_party/blink/renderer/core/page/build.gni
+@@ -41,6 +41,8 @@ blink_core_sources_page = [
+   "link_highlight.h",
+   "page.cc",
+   "page.h",
++  "dub_page_clock.cc",
++  "dub_page_clock.h",
+   "page_animator.cc",
+   "page_animator.h",
+   "page_hidden_state.h",
+diff --git a/third_party/blink/renderer/core/page/page.h b/third_party/blink/renderer/core/page/page.h
+--- a/third_party/blink/renderer/core/page/page.h
++++ b/third_party/blink/renderer/core/page/page.h
+@@ -83,6 +83,7 @@ class ContextMenuController;
+ class Document;
+ class DragCaret;
+ class DragController;
++class DubPageClock;
+ class FocusController;
+ class Frame;
+ class LinkHighlight;
+@@ -235,6 +236,7 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
+   void SetOpenedByDOM();
+ 
+   PageAnimator& Animator() { return *animator_; }
++  DubPageClock* GetDubClock() const { return dub_clock_.Get(); }
+   ChromeClient& GetChromeClient() const {
+     DCHECK(chrome_client_) << "No chrome client";
+     return *chrome_client_;
+@@ -596,6 +598,7 @@ class CORE_EXPORT Page final : public GarbageCollected<Page>,
+ 
+   Member<AgentGroupScheduler> agent_group_scheduler_;
+   Member<PageAnimator> animator_;
++  Member<DubPageClock> dub_clock_;
+   const Member<AutoscrollController> autoscroll_controller_;
+   Member<ChromeClient> chrome_client_;
+   const Member<DragCaret> drag_caret_;
+diff --git a/third_party/blink/renderer/core/page/page.cc b/third_party/blink/renderer/core/page/page.cc
+--- a/third_party/blink/renderer/core/page/page.cc
++++ b/third_party/blink/renderer/core/page/page.cc
+@@ -71,6 +71,7 @@
+ #include "third_party/blink/renderer/core/page/chrome_client.h"
+ #include "third_party/blink/renderer/core/page/context_menu_controller.h"
+ #include "third_party/blink/renderer/core/page/drag_controller.h"
++#include "third_party/blink/renderer/core/page/dub_page_clock.h"
+ #include "third_party/blink/renderer/core/page/focus_controller.h"
+ #include "third_party/blink/renderer/core/page/link_highlight.h"
+ #include "third_party/blink/renderer/core/page/page_animator.h"
+@@ -249,6 +250,7 @@ Page::Page(base::PassKey<Page>,
+       main_frame_(nullptr),
+       agent_group_scheduler_(agent_group_scheduler),
+       animator_(MakeGarbageCollected<PageAnimator>(*this)),
++      dub_clock_(MakeGarbageCollected<DubPageClock>(*this)),
+       autoscroll_controller_(MakeGarbageCollected<AutoscrollController>(*this)),
+       chrome_client_(&chrome_client),
+       drag_caret_(MakeGarbageCollected<DragCaret>()),
+@@ -1312,6 +1314,7 @@ void Page::WillBeDestroyed() {
+ 
+ void Page::Trace(Visitor* visitor) const {
+   visitor->Trace(animator_);
++  visitor->Trace(dub_clock_);
+   visitor->Trace(autoscroll_controller_);
+   visitor->Trace(chrome_client_);
+   visitor->Trace(drag_caret_);
+@@ -1356,6 +1359,9 @@ void Page::Trace(Visitor* visitor) const {
+ }
+ 
+ void Page::WillBeDestroyed() {
++  if (dub_clock_) {
++    dub_clock_->DetachFromPage();
++  }
+   Frame* main_frame = main_frame_;
+ 
+   // TODO(https://crbug.com/838348): Sadly, there are situations where Blink may
+diff --git a/third_party/blink/renderer/core/page/page_animator.cc b/third_party/blink/renderer/core/page/page_animator.cc
+--- a/third_party/blink/renderer/core/page/page_animator.cc
++++ b/third_party/blink/renderer/core/page/page_animator.cc
+@@ -20,6 +20,7 @@
+ #include "third_party/blink/renderer/core/frame/local_frame_view.h"
+ #include "third_party/blink/renderer/core/loader/document_loader.h"
+ #include "third_party/blink/renderer/core/page/chrome_client.h"
++#include "third_party/blink/renderer/core/page/dub_page_clock.h"
+ #include "third_party/blink/renderer/core/page/page.h"
+ #include "third_party/blink/renderer/core/page/scrolling/sync_scroll_attempt_heuristic.h"
+ #include "third_party/blink/renderer/core/page/validation_message_client.h"
+@@ -78,6 +79,14 @@ void PageAnimator::ServiceScriptedAnimations(
+     base::TimeTicks monotonic_animation_start_time) {
+   base::AutoReset<bool> servicing(&servicing_animations_, true);
+ 
++  if (page_->GetDubClock() && page_->GetDubClock()->IsFrozen() &&
++      !page_->GetDubClock()->IsStepping()) {
++    const base::TimeTicks frozen_ticks = page_->GetDubClock()->NowTicks();
++    Clock().SetAllowedToDynamicallyUpdateTime(false);
++    Clock().UpdateTime(frozen_ticks);
++    return;
++  }
++
+   // Once we are inside a frame's lifecycle, the AnimationClock should hold its
+   // time value until the end of the frame.
+   Clock().SetAllowedToDynamicallyUpdateTime(false);
+diff --git a/third_party/blink/renderer/core/timing/performance.cc b/third_party/blink/renderer/core/timing/performance.cc
+--- a/third_party/blink/renderer/core/timing/performance.cc
++++ b/third_party/blink/renderer/core/timing/performance.cc
+@@ -42,6 +42,7 @@
+ #include "base/time/time.h"
+ #include "base/values.h"
+ #include "services/metrics/public/cpp/ukm_builders.h"
+ #include "third_party/blink/public/common/features.h"
++#include "third_party/blink/renderer/core/page/dub_page_clock.h"
+ #include "third_party/blink/public/mojom/permissions_policy/document_policy_feature.mojom-blink.h"
+ #include "third_party/blink/public/platform/platform.h"
+@@ -1351,6 +1352,12 @@ DOMHighResTimeStamp Performance::MonotonicTimeToDOMHighResTimeStamp(
+ }
+ 
+ DOMHighResTimeStamp Performance::now() const {
++  if (DubClockState* state =
++          DubPageClock::StateForContext(GetExecutionContext())) {
++    base::TimeTicks virtual_ticks;
++    if (state->GetMonotonicTicks(&virtual_ticks))
++      return MonotonicTimeToDOMHighResTimeStamp(virtual_ticks);
++  }
+   return MonotonicTimeToDOMHighResTimeStamp(base::TimeTicks::Now());
+ }
+ 
+diff --git a/third_party/blink/renderer/core/scheduler/dom_timer.h b/third_party/blink/renderer/core/scheduler/dom_timer.h
+--- a/third_party/blink/renderer/core/scheduler/dom_timer.h
++++ b/third_party/blink/renderer/core/scheduler/dom_timer.h
+@@ -102,6 +102,13 @@ class CORE_EXPORT DOMTimer final : public GarbageCollected<DOMTimer>,
+ 
+   void Stop() override;
+ 
++  bool IsDubVirtualManaged() const { return dub_virtual_managed_; }
++  bool AdoptIntoDubClock(base::TimeDelta* out_remaining,
++                         base::TimeDelta* out_interval,
++                         bool* out_single_shot);
++  void ReleaseFromDubClock(base::TimeDelta remaining);
++  void FireFromDubClock();
++
+  private:
+   static void RemoveByID(ExecutionContext&, int timeout_id);
+   void Fired() override;
+@@ -115,6 +122,10 @@ class CORE_EXPORT DOMTimer final : public GarbageCollected<DOMTimer>,
+   int nesting_level_;
+   probe::AsyncTaskContext async_task_context_;
+   Member<ScheduledAction> action_;
++  bool dub_virtual_managed_ = false;
++  bool dub_single_shot_ = true;
++  bool dub_precise_ = false;
++  base::TimeDelta dub_timeout_;
+   SEQUENCE_CHECKER(sequence_checker_);
+ };
+ 
+diff --git a/third_party/blink/renderer/core/scheduler/dom_timer.cc b/third_party/blink/renderer/core/scheduler/dom_timer.cc
+--- a/third_party/blink/renderer/core/scheduler/dom_timer.cc
++++ b/third_party/blink/renderer/core/scheduler/dom_timer.cc
+@@ -41,6 +41,7 @@
+ #include "third_party/blink/renderer/core/frame/local_dom_window.h"
+ #include "third_party/blink/renderer/core/frame/page_dismissal_scope.h"
+ #include "third_party/blink/renderer/core/inspector/inspector_trace_events.h"
++#include "third_party/blink/renderer/core/page/dub_page_clock.h"
+ #include "third_party/blink/renderer/core/probe/core_probes.h"
+ #include "third_party/blink/renderer/core/scheduler/scheduled_action.h"
+ #include "third_party/blink/renderer/platform/bindings/exception_state.h"
+@@ -355,10 +356,19 @@ DOMTimer::DOMTimer(ExecutionContext& context,
+     timeout = std::max(timeout, base::Milliseconds(1));
+   }
+ 
+-  if (single_shot) {
+-    StartOneShot(timeout, FROM_HERE, precise);
++  dub_single_shot_ = single_shot;
++  dub_precise_ = precise;
++  dub_timeout_ = timeout;
++
++  DubPageClock* dub_clock = DubPageClock::ForContext(&context);
++  if (dub_clock && dub_clock->OnTimerCreated(this, timeout, single_shot)) {
++    dub_virtual_managed_ = true;
+   } else {
+-    StartRepeating(timeout, FROM_HERE, precise);
++    if (single_shot) {
++      StartOneShot(timeout, FROM_HERE, precise);
++    } else {
++      StartRepeating(timeout, FROM_HERE, precise);
++    }
+   }
+ 
+   DEVTOOLS_TIMELINE_TRACE_EVENT_INSTANT(
+@@ -376,6 +386,10 @@ void DOMTimer::Dispose() {
+ 
+ void DOMTimer::Stop() {
+   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
++  if (DubPageClock* dub_clock = DubPageClock::ForContext(GetExecutionContext())) {
++    dub_clock->OnTimerStopped(this);
++  }
++  dub_virtual_managed_ = false;
+   // TimerBase::Stop() must run even when action_ is null. During cppgc lazy
+   // sweeping the pre-finalizer (Dispose) may call Stop() after action_ has
+   // already been cleared by a previous Stop(). Skipping TimerBase::Stop() in
+@@ -383,7 +397,8 @@ void DOMTimer::Stop() {
+   // captured pointer is poisoned by Oilpan right after Dispose() returns.
+   if (action_) {
+     async_task_context_.Cancel();
+-    const bool is_interval = RepeatInterval().has_value();
++    const bool is_interval =
++        !dub_single_shot_ || RepeatInterval().has_value();
+ 
+     // Release the action before invoking the probe to ensure that any
+     // re-entrant Stop() calls will safely and silently no-op.
+@@ -403,6 +418,50 @@ void DOMTimer::Stop() {
+   TimerBase::Stop();
+ }
+ 
++bool DOMTimer::AdoptIntoDubClock(base::TimeDelta* out_remaining,
++                                 base::TimeDelta* out_interval,
++                                 bool* out_single_shot) {
++  if (dub_virtual_managed_ || !action_ || !IsActive()) {
++    return false;
++  }
++  const std::optional<base::TimeDelta> repeat = RepeatInterval();
++  *out_single_shot = !repeat.has_value();
++  *out_interval = repeat.value_or(dub_timeout_);
++  *out_remaining = NextFireInterval();
++  TimerBase::Stop();
++  dub_virtual_managed_ = true;
++  dub_single_shot_ = *out_single_shot;
++  dub_timeout_ = *out_interval;
++  return true;
++}
++
++void DOMTimer::ReleaseFromDubClock(base::TimeDelta remaining) {
++  if (!dub_virtual_managed_) {
++    return;
++  }
++  dub_virtual_managed_ = false;
++  if (!action_ || !GetExecutionContext()) {
++    return;
++  }
++  if (dub_single_shot_) {
++    StartOneShot(remaining, FROM_HERE, dub_precise_);
++  } else {
++    StartRepeating(std::max(remaining, dub_timeout_), FROM_HERE, dub_precise_);
++  }
++}
++
++void DOMTimer::FireFromDubClock() {
++  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
++  if (!dub_virtual_managed_ || !action_) {
++    return;
++  }
++  ExecutionContext* context = GetExecutionContext();
++  if (!context || context->IsContextPaused()) {
++    return;
++  }
++  Fired();
++}
++
+ void DOMTimer::ContextDestroyed() {
+   Stop();
+ }
+@@ -416,7 +473,8 @@ void DOMTimer::Fired() {
+ 
+   DEVTOOLS_TIMELINE_TRACE_EVENT("TimerFire", inspector_timer_fire_event::Data,
+                                 context, timeout_id_);
+-  const bool is_interval = RepeatInterval().has_value();
++  const bool is_interval =
++      dub_virtual_managed_ ? !dub_single_shot_ : RepeatInterval().has_value();
+ 
+   probe::UserCallback probe(context, is_interval ? "setInterval" : "setTimeout",
+                             g_null_atom, true);
+@@ -430,28 +488,32 @@ void DOMTimer::Fired() {
+   const int max_timer_nesting_level = kSpecCompliantMaxTimerNestingLevel;
+ 
+   // Simple case for non-one-shot timers.
+-  if (IsActive()) {
++  if (IsActive() || (dub_virtual_managed_ && !dub_single_shot_)) {
+     DCHECK(is_interval);
+-    DCHECK(RepeatInterval());
++    if (!dub_virtual_managed_) {
++      DCHECK(RepeatInterval());
++    }
+ 
+     // Steps 12 and 13:
+     IncrementNestingLevel();
+ 
+-    // Step 11:
+-    // Make adjustments when the nesting level becomes > |kMaxNestingLevel|.
+-    if (nesting_level_ == max_timer_nesting_level + 1 &&
+-        (*RepeatInterval() < kMinimumInterval)) {
+-      AugmentRepeatInterval(kMinimumInterval - *RepeatInterval());
+-    }
+-    if (nesting_level_ == max_timer_nesting_level + 1) {
+-      // Move to the TaskType that corresponds to nesting level >=
+-      // |kMaxNestingLevel|.
+-      MoveToNewTaskRunner(
+-          context->GetTaskRunner(TaskType::kJavascriptTimerDelayedHighNesting));
+-    }
++    if (!dub_virtual_managed_) {
++      // Step 11:
++      // Make adjustments when the nesting level becomes > |kMaxNestingLevel|.
++      if (nesting_level_ == max_timer_nesting_level + 1 &&
++          (*RepeatInterval() < kMinimumInterval)) {
++        AugmentRepeatInterval(kMinimumInterval - *RepeatInterval());
++      }
++      if (nesting_level_ == max_timer_nesting_level + 1) {
++        // Move to the TaskType that corresponds to nesting level >=
++        // |kMaxNestingLevel|.
++        MoveToNewTaskRunner(
++            context->GetTaskRunner(TaskType::kJavascriptTimerDelayedHighNesting));
++      }
+ 
+-    DCHECK(nesting_level_ <= max_timer_nesting_level ||
+-           (is_interval && *RepeatInterval() >= kMinimumInterval));
++      DCHECK(nesting_level_ <= max_timer_nesting_level ||
++             (is_interval && *RepeatInterval() >= kMinimumInterval));
++    }
+ 
+     // No access to member variables after this point, it can delete the timer.
+     action_->Execute(context);
+@@ -459,6 +521,7 @@ void DOMTimer::Fired() {
+ 
+     return;
+   }
++  dub_virtual_managed_ = false;
+ 
+   // Unregister the timer from ExecutionContext before executing the action
+   // for one-shot timers.
+diff --git a/third_party/blink/renderer/core/animation/keyframe_effect.cc b/third_party/blink/renderer/core/animation/keyframe_effect.cc
+--- a/third_party/blink/renderer/core/animation/keyframe_effect.cc
++++ b/third_party/blink/renderer/core/animation/keyframe_effect.cc
+@@ -51,6 +51,8 @@
+ #include "third_party/blink/renderer/core/dom/pseudo_element.h"
+ #include "third_party/blink/renderer/core/dom/shadow_root.h"
+ #include "third_party/blink/renderer/core/frame/web_feature.h"
++#include "third_party/blink/renderer/core/page/dub_page_clock.h"
++#include "third_party/blink/renderer/core/page/page.h"
+ #include "third_party/blink/renderer/core/paint/paint_layer.h"
+ #include "third_party/blink/renderer/core/style/computed_style.h"
+ #include "third_party/blink/renderer/core/style/computed_style_constants.h"
+@@ -467,6 +469,11 @@ KeyframeEffect::CheckCanStartAnimationOnCompositor(
+     state.disposition |= CompositorAnimations::kInvalidAnimationOrEffect;
+   } else if (IsCurrent() ||
+              start_reason == StartOnCompositorReason::kAnimationTrigger) {
++    if (Page* page = effect_target_->GetDocument().GetPage();
++        page && page->GetDubClock() && page->GetDubClock()->IsFrozen()) {
++      state.disposition |= CompositorAnimations::kUnsupportedCSSProperty;
++    }
++
+     if (effect_target_->GetComputedStyle() &&
+         effect_target_->GetComputedStyle()->HasOffset())
+       state.disposition |= CompositorAnimations::kTargetHasCSSOffset;
+diff --git a/third_party/blink/renderer/core/dom/document.cc b/third_party/blink/renderer/core/dom/document.cc
+--- a/third_party/blink/renderer/core/dom/document.cc
++++ b/third_party/blink/renderer/core/dom/document.cc
+@@ -329,3 +329,4 @@
+ #include "third_party/blink/renderer/core/page/chrome_client.h"
++#include "third_party/blink/renderer/core/page/dub_page_clock.h"
+ #include "third_party/blink/renderer/core/page/event_with_hit_test_results.h"
+ #include "third_party/blink/renderer/core/page/focus_controller.h"
+@@ -1068,5 +1069,8 @@ Document::Document(const DocumentInit& initializer,
+   }
+   if (LocalFrame* frame = GetFrame()) {
+     DCHECK(frame->GetPage());
++    if (DubPageClock* dub_clock = frame->GetPage()->GetDubClock()) {
++      dub_clock->AttachDocumentClock(this);
++    }
+     fetcher_ = FrameFetchContext::CreateFetcherForCommittedDocument(
+         *frame->Loader().GetDocumentLoader(), *this);
+diff --git a/third_party/blink/renderer/core/workers/dedicated_worker_thread.h b/third_party/blink/renderer/core/workers/dedicated_worker_thread.h
+--- a/third_party/blink/renderer/core/workers/dedicated_worker_thread.h
++++ b/third_party/blink/renderer/core/workers/dedicated_worker_thread.h
+@@ -34,6 +34,7 @@
+ #include <memory>
+ 
+ #include "base/memory/raw_ref.h"
++#include "base/memory/scoped_refptr.h"
+ #include "services/metrics/public/cpp/ukm_source_id.h"
+ #include "third_party/blink/public/mojom/frame/back_forward_cache_controller.mojom-blink-forward.h"
+ #include "third_party/blink/public/mojom/worker/dedicated_worker_host.mojom-blink-forward.h"
+@@ -43,6 +44,7 @@
+ namespace blink {
+ 
+ class DedicatedWorkerObjectProxy;
++class DubClockState;
+ struct GlobalScopeCreationParams;
+ 
+ class CORE_EXPORT DedicatedWorkerThread : public WorkerThread {
+@@ -84,6 +86,7 @@ class CORE_EXPORT DedicatedWorkerThread : public WorkerThread {
+       pending_dedicated_worker_host_;
+   mojo::PendingRemote<mojom::blink::BackForwardCacheControllerHost>
+       pending_back_forward_cache_controller_host_;
++  scoped_refptr<DubClockState> dub_clock_state_;
+ };
+ 
+ }  // namespace blink
+diff --git a/third_party/blink/renderer/core/workers/dedicated_worker_thread.cc b/third_party/blink/renderer/core/workers/dedicated_worker_thread.cc
+--- a/third_party/blink/renderer/core/workers/dedicated_worker_thread.cc
++++ b/third_party/blink/renderer/core/workers/dedicated_worker_thread.cc
+@@ -38,6 +38,7 @@
+ #include "services/metrics/public/cpp/ukm_source_id.h"
+ #include "third_party/blink/renderer/core/dom/document.h"
+ #include "third_party/blink/renderer/core/execution_context/execution_context.h"
++#include "third_party/blink/renderer/core/page/dub_page_clock.h"
+ #include "third_party/blink/renderer/core/workers/dedicated_worker_global_scope.h"
+ #include "third_party/blink/renderer/core/workers/dedicated_worker_object_proxy.h"
+ #include "third_party/blink/renderer/core/workers/global_scope_creation_params.h"
+@@ -57,6 +58,10 @@ DedicatedWorkerThread::DedicatedWorkerThread(
+       pending_dedicated_worker_host_(std::move(dedicated_worker_host)),
+       pending_back_forward_cache_controller_host_(
+           std::move(back_forward_cache_controller_host)) {
++  if (DubClockState* state =
++          DubPageClock::StateForContext(parent_execution_context)) {
++    dub_clock_state_ = base::WrapRefCounted(state);
++  }
+   FrameOrWorkerScheduler* scheduler =
+       parent_execution_context ? parent_execution_context->GetScheduler()
+                                : nullptr;
+@@ -74,10 +78,15 @@ WorkerOrWorkletGlobalScope* DedicatedWorkerThread::CreateWorkerGlobalScope(
+     V8PerIsolateData::From(GetIsolate())
+         ->InitializeTaskAttributionTrackerOnWorkerThread();
+   }
+-  return DedicatedWorkerGlobalScope::Create(
++  auto* scope = DedicatedWorkerGlobalScope::Create(
+       std::move(creation_params), this, time_origin_,
+       std::move(pending_dedicated_worker_host_),
+       std::move(pending_back_forward_cache_controller_host_));
++  if (dub_clock_state_) {
++    DubClockState::InstallOnIsolate(GetIsolate());
++    scope->SetDubClockState(dub_clock_state_);
++  }
++  return scope;
+ }
+ 
+ }  // namespace blink
+diff --git a/third_party/blink/renderer/core/workers/dedicated_worker_global_scope.h b/third_party/blink/renderer/core/workers/dedicated_worker_global_scope.h
+--- a/third_party/blink/renderer/core/workers/dedicated_worker_global_scope.h
++++ b/third_party/blink/renderer/core/workers/dedicated_worker_global_scope.h
+@@ -34,5 +34,6 @@
+ #include <memory>
+ 
++#include "base/memory/scoped_refptr.h"
+ #include "base/types/pass_key.h"
+ #include "net/storage_access_api/status.h"
+ #include "third_party/blink/public/common/permissions_policy/document_policy.h"
+@@ -52,5 +53,6 @@ namespace blink {
+ 
+ class DedicatedWorkerObjectProxy;
+ class DedicatedWorkerThread;
++class DubClockState;
+ class PostMessageOptions;
+ class ScriptState;
+@@ -91,6 +93,9 @@ class CORE_EXPORT DedicatedWorkerGlobalScope final : public WorkerGlobalScope {
+   ~DedicatedWorkerGlobalScope() override;
+ 
+   // Implements ExecutionContext.
++  void SetDubClockState(scoped_refptr<DubClockState> state);
++  DubClockState* GetDubClockState() const;
++
+   void SetIsInBackForwardCache(bool) override;
+   bool IsDedicatedWorkerGlobalScope() const override { return true; }
+   net::StorageAccessApiStatus GetStorageAccessApiStatus() const override;
+@@ -267,6 +274,7 @@ class CORE_EXPORT DedicatedWorkerGlobalScope final : public WorkerGlobalScope {
+ 
+   // Initiator URL for this worker's script ResourceTiming entry.
+   KURL worker_script_initiator_url_;
++  scoped_refptr<DubClockState> dub_clock_state_;
+ };
+ 
+ template <>
+diff --git a/third_party/blink/renderer/core/workers/dedicated_worker_global_scope.cc b/third_party/blink/renderer/core/workers/dedicated_worker_global_scope.cc
+--- a/third_party/blink/renderer/core/workers/dedicated_worker_global_scope.cc
++++ b/third_party/blink/renderer/core/workers/dedicated_worker_global_scope.cc
+@@ -54,5 +54,6 @@
+ #include "third_party/blink/renderer/core/inspector/inspector_trace_events.h"
+ #include "third_party/blink/renderer/core/inspector/worker_thread_debugger.h"
+ #include "third_party/blink/renderer/core/messaging/blink_transferable_message.h"
+ #include "third_party/blink/renderer/core/origin_trials/origin_trial_context.h"
++#include "third_party/blink/renderer/core/page/dub_page_clock.h"
+ #include "third_party/blink/renderer/core/probe/core_probes.h"
+@@ -237,5 +238,14 @@ DedicatedWorkerGlobalScope::DedicatedWorkerGlobalScope(
+ }
+ 
+ DedicatedWorkerGlobalScope::~DedicatedWorkerGlobalScope() = default;
++
++void DedicatedWorkerGlobalScope::SetDubClockState(
++    scoped_refptr<DubClockState> state) {
++  dub_clock_state_ = std::move(state);
++}
++
++DubClockState* DedicatedWorkerGlobalScope::GetDubClockState() const {
++  return dub_clock_state_.get();
++}
+ 
+ void DedicatedWorkerGlobalScope::Dispose() {

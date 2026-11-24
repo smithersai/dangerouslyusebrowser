@@ -5,5 +5,5 @@ export { createCommands } from './commands.js';
 export type { Capabilities } from './commands.js';
 export { listen } from './http.js';
 export type { ListenOptions } from './http.js';
-export { launch } from './launch.js';
-export type { LaunchOptions, Session, SessionHealth, SessionState } from './launch.js';
+export { launch, attachProfile } from './launch.js';
+export type { LaunchOptions, ProfileAttachResult, Session, SessionHealth, SessionState } from './launch.js';

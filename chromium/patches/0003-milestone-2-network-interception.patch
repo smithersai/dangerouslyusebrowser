@@ -11,10 +11,11 @@ index 1111111111111..2222222222222 100644
        "dub/dub_server.cc",
        "dub/dub_server.h",
        "dub/dub_upload.cc",
-@@ -2034,6 +2036,7 @@ source_set("core") {
+@@ -2034,6 +2036,8 @@ source_set("core") {
        "//chrome/common:mojo_bindings",
        "//components/tabs:public",
        "//components/version_info",
++      "//chrome/browser/lifetime:termination_notification",
 +      "//components/web_cache/browser",
        "//ui/gfx/codec",
      ]

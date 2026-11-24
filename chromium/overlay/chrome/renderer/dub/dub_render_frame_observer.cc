@@ -550,4 +550,32 @@ void DubRenderFrameObserver::ResolveTarget(const std::string& target,
   std::move(callback).Run(std::move(res));
 }
 
+void DubRenderFrameObserver::ClockControl(const std::string& op,
+                                          int64_t epoch_ms,
+                                          int64_t delta_ms,
+                                          uint32_t frames,
+                                          ClockControlCallback callback) {
+  auto out = dub::mojom::ClockState::New();
+  blink::WebLocalFrame* frame = render_frame()->GetWebFrame();
+  if (!frame) {
+    out->ok = false;
+    out->error_code = "FRAME_GONE";
+    out->error_message = "Frame is unavailable";
+    std::move(callback).Run(std::move(out));
+    return;
+  }
+  blink::WebLocalFrame::DubClockResult res = frame->ControlDubClock(
+      blink::WebString::FromUtf8(op), epoch_ms, delta_ms, frames);
+  out->ok = res.ok;
+  out->frozen = res.frozen;
+  out->epoch_ms = res.epoch_ms;
+  out->performance_now_ms = res.performance_now_ms;
+  out->timers_fired = res.timers_fired;
+  out->timers_capped = res.timers_capped;
+  out->frames_stepped = res.frames_stepped;
+  out->error_code = res.error_code.Utf8();
+  out->error_message = res.error_message.Utf8();
+  std::move(callback).Run(std::move(out));
+}
+
 }  // namespace dub

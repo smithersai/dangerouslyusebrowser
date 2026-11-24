@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdir, lstat, unlink, realpath } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Browser, type BrowserInfo } from './browser.js';
@@ -149,5 +149,79 @@ export async function launch(options: LaunchOptions = {}): Promise<Session> {
     const st = await lstat(socket).catch(() => undefined);
     if (st?.isSocket() && ownedSocketId) await unlinkIfSameSocket(socket, ownedSocketId);
     throw error;
+  }
+}
+
+export type ProfileAttachResult = {
+  status: 'reconnected' | 'requires_restart' | 'locked_by_other_process' | 'not_running';
+  owned: false;
+  requiresRestart: boolean;
+  socket: string;
+  profile: string;
+  currentProfile?: string;
+  instanceId?: string;
+  message: string;
+};
+
+export async function attachProfile(options: {
+  name: string;
+  dir?: string;
+  socket?: string;
+}): Promise<ProfileAttachResult> {
+  const socket = resolve(options.socket ?? defaultSocket());
+  const userDataDir = resolve(options.dir ?? join(homedir(), '.dub', 'profile'));
+  const targetProfile = join(userDataDir, options.name);
+
+  try {
+    const info = await new Browser(new NativeBridge(socket, 1000)).info();
+    const matchesPath =
+      info.profile === targetProfile ||
+      (dirname(info.profile) === userDataDir && basename(info.profile) === options.name);
+    if (matchesPath) {
+      return {
+        status: 'reconnected',
+        owned: false,
+        requiresRestart: false,
+        socket,
+        profile: info.profile,
+        instanceId: info.instanceId,
+        message: `Reconnected to running Dub session for profile ${options.name}.`,
+      };
+    }
+    return {
+      status: 'requires_restart',
+      owned: false,
+      requiresRestart: true,
+      socket,
+      profile: targetProfile,
+      currentProfile: info.profile,
+      instanceId: info.instanceId,
+      message:
+        `Dub is currently running with profile ${info.profile}. Stop that session or launch a separate Dub instance with --socket, --profile ${userDataDir}, and --profile-name ${options.name}.`,
+    };
+  } catch {
+    // No live Dub listener on this socket; check whether Chromium's SingletonLock
+    // indicates another browser process (such as stock Chrome) owns the directory.
+    const lockStat = await lstat(join(userDataDir, 'SingletonLock')).catch(() => undefined);
+    if (lockStat) {
+      return {
+        status: 'locked_by_other_process',
+        owned: false,
+        requiresRestart: true,
+        socket,
+        profile: targetProfile,
+        message:
+          `Profile directory ${userDataDir} is locked by another Chromium process. Dub does not attach to arbitrary stock Chrome; close that browser or select a separate profile directory.`,
+      };
+    }
+    return {
+      status: 'not_running',
+      owned: false,
+      requiresRestart: true,
+      socket,
+      profile: targetProfile,
+      message:
+        `No Dub browser is listening on ${socket}. Start one with: dub serve --profile ${userDataDir} --profile-name ${options.name} --socket ${socket}`,
+    };
   }
 }

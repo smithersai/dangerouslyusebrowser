@@ -35,6 +35,11 @@ class DubRenderFrameObserver : public content::RenderFrameObserver,
   void ResolveTarget(const std::string& target,
                      bool is_selector,
                      ResolveTargetCallback callback) override;
+  void ClockControl(const std::string& op,
+                    int64_t epoch_ms,
+                    int64_t delta_ms,
+                    uint32_t frames,
+                    ClockControlCallback callback) override;
 
   void ResolvePendingEval(uint64_t eval_id,
                           bool ok,

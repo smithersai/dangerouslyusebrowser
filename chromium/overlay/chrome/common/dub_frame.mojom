@@ -28,6 +28,18 @@ struct TargetResolution {
   string error;
 };
 
+struct ClockState {
+  bool ok;
+  bool frozen;
+  int64 epoch_ms;
+  double performance_now_ms;
+  uint32 timers_fired;
+  bool timers_capped;
+  uint32 frames_stepped;
+  string error_code;
+  string error_message;
+};
+
 interface DubRenderFrame {
   // Promise-aware main-world JavaScript evaluation.
   Evaluate(string expression) => (EvalResult result);
@@ -50,4 +62,8 @@ interface DubRenderFrame {
 
   // Resolves a CSS selector or visible label text to viewport DIP coordinates.
   ResolveTarget(string target, bool is_selector) => (TargetResolution result);
+
+  // Controls this frame's Page-scoped virtual clock (freeze/advance/step/resume).
+  ClockControl(string op, int64 epoch_ms, int64 delta_ms, uint32 frames)
+      => (ClockState state);
 };

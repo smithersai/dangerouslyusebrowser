@@ -1,7 +1,9 @@
 // Copyright 2026 The Dub Authors. SPDX-License-Identifier: MIT
 #include "chrome/browser/dub/dub_dispatch.h"
 
+#include <cmath>
 #include <memory>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -149,7 +151,8 @@ base::ListValue SupportedMethods() {
        {"browser.info", "tabs.list", "tabs.open", "tabs.close",
         "tabs.activate", "tabs.navigate", "page.evaluate", "page.screenshot",
         "tools.list", "tools.call", "profile.info", "profile.clear",
-        "net.set", "net.list", "net.remove", "net.log"}) {
+        "net.set", "net.list", "net.remove", "net.log",
+        "clock.freeze", "clock.advance", "clock.step", "clock.resume"}) {
     methods.Append(method);
   }
   return methods;
@@ -1148,7 +1151,9 @@ void Dispatch(const SessionContext& session,
       method == "tabs.close" || method == "tabs.activate" ||
       method == "tabs.navigate" || method == "page.evaluate" ||
       method == "page.screenshot" || method == "tools.list" ||
-      method == "tools.call";
+      method == "tools.call" || method == "clock.freeze" ||
+      method == "clock.advance" || method == "clock.step" ||
+      method == "clock.resume";
   if (!is_tab_method) {
     std::move(reply).Run(
         Error("METHOD_NOT_FOUND", "Native method is not implemented: " + method));
@@ -1302,6 +1307,140 @@ void Dispatch(const SessionContext& session,
     InvokeTool(session, tab, *params.FindString("name"),
                *params.FindDict("input"), std::move(reply),
                std::move(set_cancel));
+    return;
+  }
+
+  if (method == "clock.freeze" || method == "clock.advance" ||
+      method == "clock.step" || method == "clock.resume") {
+    std::string op;
+    int64_t epoch_ms = 0;
+    int64_t delta_ms = 0;
+    uint32_t frames = 0;
+    if (method == "clock.freeze") {
+      op = "freeze";
+      const std::string* at = params.FindString("at");
+      if (!at || at->empty()) {
+        std::move(reply).Run(
+            Error("INVALID_PARAMS", "Expected ISO-8601 timestamp string 'at'"));
+        return;
+      }
+      base::Time parsed;
+      if (!base::Time::FromString(at->c_str(), &parsed)) {
+        std::move(reply).Run(
+            Error("INVALID_PARAMS", "Could not parse ISO timestamp: " + *at));
+        return;
+      }
+      epoch_ms = parsed.InMillisecondsSinceUnixEpoch();
+    } else if (method == "clock.advance") {
+      op = "advance";
+      const std::optional<double> ms = params.FindDouble("milliseconds");
+      if (!ms || !std::isfinite(*ms) || *ms < 0.0) {
+        std::move(reply).Run(Error(
+            "INVALID_PARAMS", "Expected non-negative number 'milliseconds'"));
+        return;
+      }
+      delta_ms = static_cast<int64_t>(*ms);
+    } else if (method == "clock.step") {
+      op = "step";
+      const int f = params.FindInt("frames").value_or(1);
+      if (f < 1 || f > 600) {
+        std::move(reply).Run(
+            Error("INVALID_PARAMS", "frames must be an integer 1-600"));
+        return;
+      }
+      frames = static_cast<uint32_t>(f);
+    } else {
+      op = "resume";
+    }
+
+    auto* main_rfh = tab.contents->GetPrimaryMainFrame();
+    if (!main_rfh || !main_rfh->IsRenderFrameLive()) {
+      std::move(reply).Run(Error("FRAME_GONE", "Main frame is not live"));
+      return;
+    }
+
+    // Mirror clock control to any out-of-process subframes (OOPIFs) in this tab.
+    content::RenderProcessHost* main_process = main_rfh->GetProcess();
+    std::set<content::RenderProcessHost*> notified_processes{main_process};
+    tab.contents->ForEachRenderFrameHost(
+        [&](content::RenderFrameHost* rfh) {
+          if (!rfh || !rfh->IsRenderFrameLive() || rfh == main_rfh) {
+            return;
+          }
+          if (notified_processes.insert(rfh->GetProcess()).second) {
+            auto sub_remote = std::make_unique<
+                mojo::AssociatedRemote<dub::mojom::DubRenderFrame>>();
+            rfh->GetRemoteAssociatedInterfaces()->GetInterface(sub_remote.get());
+            auto* sub_ptr = sub_remote->get();
+            sub_ptr->ClockControl(
+                op, epoch_ms, delta_ms, frames,
+                base::BindOnce(
+                    [](std::unique_ptr<
+                           mojo::AssociatedRemote<dub::mojom::DubRenderFrame>>,
+                       dub::mojom::ClockStatePtr) {},
+                    std::move(sub_remote)));
+          }
+        });
+
+    const content::GlobalRenderFrameHostId main_fid = main_rfh->GetGlobalId();
+    const bool wait_visual_commit =
+        (op == "step" || op == "advance") &&
+        tab.contents->GetVisibility() == content::Visibility::VISIBLE;
+    auto remote =
+        std::make_unique<mojo::AssociatedRemote<dub::mojom::DubRenderFrame>>();
+    main_rfh->GetRemoteAssociatedInterfaces()->GetInterface(remote.get());
+    auto* dub_frame = remote->get();
+    dub_frame->ClockControl(
+        op, epoch_ms, delta_ms, frames,
+        mojo::WrapCallbackWithDefaultInvokeIfNotRun(
+            base::BindOnce(
+                [](std::unique_ptr<
+                       mojo::AssociatedRemote<dub::mojom::DubRenderFrame>>
+                       keep_alive,
+                   content::GlobalRenderFrameHostId fid,
+                   bool wait_commit,
+                   Reply done,
+                   dub::mojom::ClockStatePtr state) {
+                  if (!state) {
+                    std::move(done).Run(Error(
+                        "FRAME_GONE", "Renderer closed during clock control"));
+                    return;
+                  }
+                  if (!state->ok) {
+                    std::move(done).Run(Error(
+                        state->error_code.empty() ? "CLOCK_FAILED"
+                                                  : state->error_code,
+                        state->error_message));
+                    return;
+                  }
+                  base::DictValue res;
+                  res.Set("frozen", state->frozen);
+                  res.Set("epochMs", static_cast<double>(state->epoch_ms));
+                  res.Set("performanceNowMs", state->performance_now_ms);
+                  res.Set("timersFired", static_cast<int>(state->timers_fired));
+                  res.Set("timersCapped", state->timers_capped);
+                  res.Set("framesStepped",
+                          static_cast<int>(state->frames_stepped));
+
+                  if (wait_commit) {
+                    if (auto* rfh = content::RenderFrameHost::FromID(fid);
+                        rfh && rfh->IsRenderFrameLive()) {
+                      rfh->InsertVisualStateCallback(base::BindOnce(
+                          [](Reply r, base::DictValue payload, bool committed) {
+                            payload.Set("committed", committed);
+                            std::move(r).Run(
+                                Result(base::Value(std::move(payload))));
+                          },
+                          std::move(done), std::move(res)));
+                      return;
+                    }
+                  }
+                  res.Set("committed", true);
+                  std::move(done).Run(Result(base::Value(std::move(res))));
+                },
+                std::move(remote), main_fid, wait_visual_commit,
+                std::move(reply)),
+            dub::mojom::ClockStatePtr()));
     return;
   }
 }

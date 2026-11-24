@@ -1,6 +1,8 @@
 import { Cli, z } from 'incur';
 import { readFile, writeFile } from 'node:fs/promises';
+import { setTimeout as delay } from 'node:timers/promises';
 import { Browser, duration } from './browser.js';
+import { attachProfile } from './launch.js';
 
 const tab = z.number().int().positive().describe('Stable tab ID from tabs list');
 const jsonObject = z.string().default('{}').describe('Tool arguments encoded as a JSON object');
@@ -63,7 +65,52 @@ export function createCommands(browser: Browser, capabilities?: Capabilities) {
     }
     if (has('net.list')) net.command('list', { description: 'List live rules', run: () => browser.rules() });
     if (has('net.remove')) net.command('remove', { description: 'Remove a rule', options: z.object({ id: z.string().min(1) }), run: c => browser.removeRule(c.options.id) });
-    if (has('net.log')) net.command('log', { description: 'Read the bounded network log after a sequence number', options: z.object({ match: z.string().default(''), since: z.number().int().min(0).default(0) }), run: c => browser.networkLog(c.options.match, c.options.since) });
+    if (has('net.log')) {
+      net.command('log', {
+        description: 'Read or follow the bounded network log after a sequence number',
+        options: z.object({
+          match: z.string().default(''),
+          since: z.number().int().min(0).default(0),
+          follow: z.boolean().default(false).describe('Poll for new entries until limit or timeoutMs'),
+          limit: z.number().int().min(1).max(2000).default(100),
+          timeoutMs: z.number().int().min(100).max(60000).default(3000),
+        }),
+        async run(c) {
+          if (!c.options.follow) {
+            return browser.networkLog(c.options.match, c.options.since);
+          }
+          let cursor = c.options.since;
+          let gap = false;
+          let droppedCount = 0;
+          let oldestSeq = 0;
+          let version = 0;
+          const entries: Array<Record<string, unknown>> = [];
+          const deadline = Date.now() + c.options.timeoutMs;
+          while (Date.now() < deadline && entries.length < c.options.limit) {
+            const page = (await browser.networkLog(c.options.match, cursor)) as {
+              entries: Array<Record<string, unknown>>;
+              nextSeq: number;
+              oldestSeq: number;
+              droppedCount: number;
+              gap: boolean;
+              version: number;
+            };
+            version = page.version;
+            oldestSeq = page.oldestSeq;
+            droppedCount = page.droppedCount;
+            if (page.gap) gap = true;
+            for (const entry of page.entries) {
+              entries.push(entry);
+              if (entries.length >= c.options.limit) break;
+            }
+            if (page.nextSeq > cursor) cursor = page.nextSeq;
+            if (entries.length >= c.options.limit) break;
+            await delay(Math.min(100, Math.max(0, deadline - Date.now())));
+          }
+          return { followed: true, version, nextSeq: cursor, oldestSeq, droppedCount, gap, entries };
+        },
+      });
+    }
     cli.command(net);
   }
   if (['clock.freeze', 'clock.advance', 'clock.step', 'clock.resume'].some(has)) {
@@ -78,6 +125,19 @@ export function createCommands(browser: Browser, capabilities?: Capabilities) {
     const profile = Cli.create('profile', { description: 'Selected browser profile and storage' });
     if (has('profile.info')) profile.command('info', { description: 'Inspect the selected profile', run: () => browser.profileInfo() });
     if (has('profile.clear')) profile.command('clear', { description: 'Clear storage for the selected profile', options: z.object({ types: z.string().optional().describe('Comma-separated: cookies,localStorage,indexedDB,cache,serviceWorkers,all') }), run: c => browser.profileClear(c.options.types ? c.options.types.split(',').map(s => s.trim()).filter(Boolean) : undefined) });
+    profile.command('attach', {
+      description: 'Inspect or reconnect to a Dub session for a named profile without silently attaching to stock Chrome',
+      options: z.object({
+        name: z.string().min(1).default('Default'),
+        dir: z.string().optional(),
+        socket: z.string().optional(),
+      }),
+      run: c => attachProfile({
+        name: c.options.name,
+        dir: c.options.dir,
+        socket: c.options.socket ?? browser.native.socket,
+      }),
+    });
     cli.command(profile);
   }
   return cli;
