@@ -21,9 +21,11 @@ export class Browser {
   activate(tab: number) { return this.native.call('tabs.activate', { tab }); }
   navigate(tab: number, url: string) { return this.native.call<Tab>('tabs.navigate', { tab, url }); }
   evaluate(tab: number, expression: string) { return this.native.call('page.evaluate', { tab, expression }); }
-  screenshot(tab: number) { return this.native.call<{ mimeType: 'image/png'; data: string }>('page.screenshot', { tab }); }
-  tools(tab: number) { return this.native.call('tools.list', { tab }); }
+  screenshot(tab: number) { return this.native.call<{ mimeType: 'image/png'; data: string; width?: number; height?: number }>('page.screenshot', { tab }); }
+  tools(tab: number) { return this.native.call<{ tools: Array<Record<string, unknown>> }>('tools.list', { tab }); }
   tool(tab: number, name: string, input: Record<string, unknown> = {}) { return this.native.call('tools.call', { tab, name, input }); }
+  profileInfo() { return this.native.call<{ path: string; name: string; instanceId: string; offTheRecord: boolean }>('profile.info'); }
+  profileClear(types?: string[]) { return this.native.call<{ cleared: boolean; profile: string; mask: number }>('profile.clear', types ? { types } : {}); }
   setRule(rule: NetworkRule) { return this.native.call('net.set', { ...rule }); }
   rules() { return this.native.call('net.list'); }
   removeRule(id: string) { return this.native.call('net.remove', { id }); }

@@ -74,5 +74,11 @@ export function createCommands(browser: Browser, capabilities?: Capabilities) {
     if (has('clock.resume')) clock.command('resume', { description: 'Resume real time', options: z.object({ tab }), run: c => browser.resume(c.options.tab) });
     cli.command(clock);
   }
+  if (has('profile.info') || has('profile.clear')) {
+    const profile = Cli.create('profile', { description: 'Selected browser profile and storage' });
+    if (has('profile.info')) profile.command('info', { description: 'Inspect the selected profile', run: () => browser.profileInfo() });
+    if (has('profile.clear')) profile.command('clear', { description: 'Clear storage for the selected profile', options: z.object({ types: z.string().optional().describe('Comma-separated: cookies,localStorage,indexedDB,cache,serviceWorkers,all') }), run: c => browser.profileClear(c.options.types ? c.options.types.split(',').map(s => s.trim()).filter(Boolean) : undefined) });
+    cli.command(profile);
+  }
   return cli;
 }

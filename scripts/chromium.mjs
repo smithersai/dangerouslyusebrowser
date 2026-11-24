@@ -278,12 +278,19 @@ function applyOverlay(srcDir, { dryRun = false } = {}) {
     if (stillDirty.length > 0) {
       throw new Error(`Tree is still dirty after revert:\n${stillDirty.map(d => `  ${d.code} ${d.path}`).join('\n')}`);
     }
-    for (const patch of patches) {
-      const patchPath = join(PATCHES_DIR, patch);
-      const patchText = readFileSync(patchPath, 'utf8');
-      git(srcDir, ['apply', '--check', patchPath]);
-      git(srcDir, ['apply', patchPath]);
-      for (const f of extractPatchedFiles(patchText)) patchedFiles.add(f);
+    try {
+      for (const patch of patches) {
+        const patchPath = join(PATCHES_DIR, patch);
+        const patchText = readFileSync(patchPath, 'utf8');
+        git(srcDir, ['apply', '--check', patchPath]);
+        git(srcDir, ['apply', patchPath]);
+        for (const f of extractPatchedFiles(patchText)) patchedFiles.add(f);
+      }
+    } catch (err) {
+      if (patchedFiles.size > 0) {
+        git(srcDir, ['checkout', '--', ...patchedFiles], { allowFail: true });
+      }
+      throw err;
     }
   }
 

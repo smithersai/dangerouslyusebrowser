@@ -1,0 +1,53 @@
+// Copyright 2026 The Dub Authors. SPDX-License-Identifier: MIT
+module dub.mojom;
+
+import "mojo/public/mojom/base/unguessable_token.mojom";
+
+struct PageToolInfo {
+  string name;
+  string title;
+  string description;
+  string input_schema;
+  bool read_only;
+  bool consequential;
+};
+
+struct EvalResult {
+  bool ok;
+  string result_json;
+  string error_code;
+  string error_message;
+};
+
+struct TargetResolution {
+  bool found;
+  int32 node_id;
+  int32 x;
+  int32 y;
+  string tag;
+  string error;
+};
+
+interface DubRenderFrame {
+  // Promise-aware main-world JavaScript evaluation.
+  Evaluate(string expression) => (EvalResult result);
+
+  // Returns live WebMCP tools registered on this frame's Document.
+  ListPageTools() => (array<PageToolInfo> tools);
+
+  // Executes a WebMCP tool registered on this frame's Document.
+  ExecutePageTool(mojo_base.mojom.UnguessableToken invocation_id,
+                  string name,
+                  string input_arguments)
+      => (bool ok,
+          string? result,
+          bool navigated,
+          string error_code,
+          string error_message);
+
+  // Cancels an in-flight WebMCP tool execution on this frame.
+  CancelPageTool(mojo_base.mojom.UnguessableToken invocation_id);
+
+  // Resolves a CSS selector or visible label text to viewport DIP coordinates.
+  ResolveTarget(string target, bool is_selector) => (TargetResolution result);
+};

@@ -1,0 +1,157 @@
+diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
+index 1111111111111..2222222222222 100644
+--- a/chrome/browser/BUILD.gn
++++ b/chrome/browser/BUILD.gn
+@@ -2026,12 +2026,15 @@ source_set("core") {
+       "dub/dub_dispatch.h",
+       "dub/dub_server.cc",
+       "dub/dub_server.h",
++      "dub/dub_upload.cc",
++      "dub/dub_upload.h",
+     ]
+     deps += [
+       "//chrome/browser/profiles/keep_alive",
+       "//chrome/common:mojo_bindings",
+       "//components/tabs:public",
+       "//components/version_info",
++      "//ui/gfx/codec",
+     ]
+   }
+ }
+diff --git a/chrome/browser/file_select_helper.cc b/chrome/browser/file_select_helper.cc
+index 1111111111111..2222222222222 100644
+--- a/chrome/browser/file_select_helper.cc
++++ b/chrome/browser/file_select_helper.cc
+@@ -27,6 +27,9 @@
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/profiles/profile_manager.h"
+ #include "chrome/browser/ui/dialogs/browser_dialogs.h"
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC)
++#include "chrome/browser/dub/dub_upload.h"
++#endif
+ #include "chrome/browser/ui/select_file_policy/chrome_select_file_policy.h"
+ #include "chrome/grit/generated_resources.h"
+ #include "components/enterprise/buildflags/buildflags.h"
+@@ -583,6 +586,11 @@ void FileSelectHelper::RunFileChooser(
+     content::RenderFrameHost* render_frame_host,
+     scoped_refptr<content::FileSelectListener> listener,
+     const FileChooserParams& params) {
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC)
++  if (dub::TryHandleFileChooser(render_frame_host, listener, params)) {
++    return;
++  }
++#endif
+   Profile* profile = Profile::FromBrowserContext(
+       render_frame_host->GetProcess()->GetBrowserContext());
+ 
+diff --git a/chrome/common/BUILD.gn b/chrome/common/BUILD.gn
+index 1111111111111..2222222222222 100644
+--- a/chrome/common/BUILD.gn
++++ b/chrome/common/BUILD.gn
+@@ -690,6 +690,7 @@ mojom("mojo_bindings") {
+   sources = [
+     "actor.mojom",
+     "chrome_render_frame.mojom",
++    "dub_frame.mojom",
+     "google_accounts_private_api_extension.mojom",
+     "media/webrtc_logging.mojom",
+     "net/net_error_page_support.mojom",
+diff --git a/chrome/renderer/BUILD.gn b/chrome/renderer/BUILD.gn
+index 1111111111111..2222222222222 100644
+--- a/chrome/renderer/BUILD.gn
++++ b/chrome/renderer/BUILD.gn
+@@ -75,6 +75,8 @@ static_library("renderer") {
+     "chrome_render_frame_observer.cc",
+     "chrome_render_frame_observer.h",
+     "chrome_render_thread_observer.cc",
++    "dub/dub_render_frame_observer.cc",
++    "dub/dub_render_frame_observer.h",
+     "chrome_render_thread_observer.h",
+     "custom_menu_commands.h",
+     "google_accounts_private_api_extension.cc",
+diff --git a/chrome/renderer/chrome_content_renderer_client.cc b/chrome/renderer/chrome_content_renderer_client.cc
+index 1111111111111..2222222222222 100644
+--- a/chrome/renderer/chrome_content_renderer_client.cc
++++ b/chrome/renderer/chrome_content_renderer_client.cc
+@@ -57,4 +57,5 @@
+ #include "chrome/renderer/browser_exposed_renderer_interfaces.h"
+ #include "chrome/renderer/chrome_content_settings_agent_delegate.h"
+ #include "chrome/renderer/chrome_render_frame_observer.h"
++#include "chrome/renderer/dub/dub_render_frame_observer.h"
+ #include "chrome/renderer/chrome_render_thread_observer.h"
+@@ -657,6 +658,7 @@ void ChromeContentRendererClient::RenderFrameCreated(
+   ChromeRenderFrameObserver* render_frame_observer =
+       new ChromeRenderFrameObserver(render_frame, web_cache_impl_.get());
+   service_manager::BinderRegistry* registry = render_frame_observer->registry();
++  new dub::DubRenderFrameObserver(render_frame);
+ 
+   new prerender::NoStatePrefetchRenderFrameObserver(render_frame);
+ 
+diff --git a/third_party/blink/public/web/web_document.h b/third_party/blink/public/web/web_document.h
+index 1111111111111..2222222222222 100644
+--- a/third_party/blink/public/web/web_document.h
++++ b/third_party/blink/public/web/web_document.h
+@@ -231,6 +231,9 @@ class BLINK_EXPORT WebDocument : public WebNode {
+   // Cancels a script tool with the given execution ID.
+   void CancelScriptTool(const base::UnguessableToken& invocation_id);
+ 
++  // Lists all WebMCP script tools currently registered on this document.
++  std::vector<WebScriptToolDeclaration> ListScriptTools() const;
++
+   // Returns whether the AutofillEvent runtime feature is enabled for this
+   // document's execution context (including origin trial tokens).
+   bool IsAutofillEventEnabled() const;
+diff --git a/third_party/blink/public/web/web_script_tool_types.h b/third_party/blink/public/web/web_script_tool_types.h
+index 1111111111111..2222222222222 100644
+--- a/third_party/blink/public/web/web_script_tool_types.h
++++ b/third_party/blink/public/web/web_script_tool_types.h
+@@ -39,6 +39,8 @@ struct WebScriptToolError {
+ };
+ 
+ struct WebScriptToolDeclaration {
++  WebString name;
++  WebString title;
+   WebString description;
+   WebString input_schema;
+   std::optional<bool> read_only;
+diff --git a/third_party/blink/renderer/core/exported/web_document.cc b/third_party/blink/renderer/core/exported/web_document.cc
+index 1111111111111..2222222222222 100644
+--- a/third_party/blink/renderer/core/exported/web_document.cc
++++ b/third_party/blink/renderer/core/exported/web_document.cc
+@@ -469,6 +469,36 @@ void WebDocument::CancelScriptTool(
+   model_context->CancelTool(invocation_id);
+ }
+ 
++std::vector<WebScriptToolDeclaration> WebDocument::ListScriptTools() const {
++  std::vector<WebScriptToolDeclaration> result;
++  const Document* document = ConstUnwrap<Document>();
++  if (!document) {
++    return result;
++  }
++  auto* model_context =
++      ModelContextSupplement::modelContext(*const_cast<Document*>(document));
++  if (!model_context) {
++    return result;
++  }
++  for (const ToolData* tool_data : model_context->ListTools()) {
++    const auto& tool = tool_data->ScriptTool();
++    WebScriptToolDeclaration decl;
++    decl.name = WebString(tool.name);
++    decl.title = tool.title ? WebString(tool.title) : WebString();
++    decl.description = WebString(tool.description);
++    decl.input_schema =
++        tool.input_schema ? WebString(tool.input_schema) : WebString();
++    if (tool.annotations) {
++      decl.read_only = tool.annotations->read_only;
++      decl.untrusted_content = tool.annotations->untrusted_content;
++      decl.consequential = tool.annotations->consequential;
++      decl.debugging = tool.annotations->debugging;
++    }
++    result.push_back(std::move(decl));
++  }
++  return result;
++}
++
+ void WebDocument::GetCrossDocumentScriptToolResult(
+     const base::UnguessableToken& invocation_id,
+     CrossDocumentScriptToolResultCallback result_callback) {

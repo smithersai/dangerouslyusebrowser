@@ -18,6 +18,7 @@
 #include <string>
 #include <utility>
 
+#include "base/callback_list.h"
 #include "base/command_line.h"
 #include "base/containers/span.h"
 #include "base/files/scoped_file.h"
@@ -35,6 +36,9 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/dub/dub_build_info.h"
 #include "chrome/browser/dub/dub_dispatch.h"
+#include "chrome/browser/lifetime/application_lifetime_desktop.h"
+#include "chrome/browser/lifetime/browser_shutdown.h"
+#include "chrome/browser/lifetime/termination_notification.h"
 #include "chrome/browser/profiles/keep_alive/profile_keep_alive_types.h"
 #include "chrome/browser/profiles/keep_alive/scoped_profile_keep_alive.h"
 #include "chrome/browser/profiles/profile.h"
@@ -196,8 +200,17 @@ class Server {
                    << selected_profile_path_;
     }
 
+    closing_browsers_subscription_ = chrome::AddClosingAllBrowsersCallback(
+        base::BindRepeating(&Server::OnClosingAllBrowsers,
+                            base::Unretained(this)));
+    app_terminating_subscription_ =
+        browser_shutdown::AddAppTerminatingCallback(base::BindOnce(
+            &Server::OnAppTerminating, base::Unretained(this)));
+
     if (!thread_.Start()) {
       LOG(ERROR) << "Dub could not start its listener thread";
+      closing_browsers_subscription_ = {};
+      app_terminating_subscription_ = {};
       profile_keep_alive_.reset();
       browser_keep_alive_.reset();
       return;
@@ -228,6 +241,8 @@ class Server {
     }
     weak_factory_.InvalidateWeakPtrs();
 
+    closing_browsers_subscription_ = {};
+    app_terminating_subscription_ = {};
     profile_keep_alive_.reset();
     browser_keep_alive_.reset();
     selected_profile_.reset();
@@ -237,6 +252,21 @@ class Server {
   }
 
  private:
+  void OnClosingAllBrowsers(bool closing) {
+    DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+    if (closing && browser_shutdown::IsTryingToQuit()) {
+      // Allow graceful exit (e.g. SIGINT / AttemptExit) to flush cookies and
+      // storage cleanly instead of being blocked by Dub's keepalive.
+      profile_keep_alive_.reset();
+      browser_keep_alive_.reset();
+    }
+  }
+
+  void OnAppTerminating() {
+    DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+    profile_keep_alive_.reset();
+    browser_keep_alive_.reset();
+  }
   struct PendingRequest {
     PendingRequest(std::unique_ptr<Connection> conn,
                    std::string req_id,
@@ -487,6 +517,8 @@ class Server {
   base::WeakPtr<Profile> selected_profile_;
   std::unique_ptr<ScopedKeepAlive> browser_keep_alive_;
   std::unique_ptr<ScopedProfileKeepAlive> profile_keep_alive_;
+  base::CallbackListSubscription closing_browsers_subscription_;
+  base::CallbackListSubscription app_terminating_subscription_;
   std::map<uint64_t, std::unique_ptr<PendingRequest>> pending_requests_;
   base::Thread thread_{"DubListener"};
   base::WeakPtrFactory<Server> weak_factory_{this};

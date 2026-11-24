@@ -120,8 +120,7 @@ test('Stage A: compiled Dub fork -> N-API -> incur MCP -> tabs + native trusted 
   for (const required of ['status', 'tabs_list', 'tabs_open', 'tabs_close', 'tabs_activate', 'tabs_navigate', 'tools_call']) {
     assert.ok(listed.has(required), `Missing required Stage A MCP tool: ${required}`);
   }
-  assert.ok(!listed.has('clock_freeze'), 'Unimplemented clock commands must stay unadvertised in Stage A');
-  assert.ok(!listed.has('net_mock'), 'Unimplemented net commands must stay unadvertised in Stage A');
+  assert.ok(!listed.has('clock_freeze'), 'Unimplemented clock commands must stay unadvertised until proven');
 
   // Open fixture page via client1, observe it from client2
   const openedRes = await client1.callTool({ name: 'tabs_open', arguments: { url: fixture.url } });

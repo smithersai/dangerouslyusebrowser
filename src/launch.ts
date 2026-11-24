@@ -27,11 +27,16 @@ export type Session = {
 async function stop(child: ChildProcess) {
   if (child.exitCode !== null || child.signalCode !== null) return;
   const finished = new Promise<void>(resolve => child.once('exit', () => resolve()));
-  child.kill('SIGTERM');
-  const timer = setTimeout(() => child.kill('SIGKILL'), 5000);
-  timer.unref();
+  // Chromium treats SIGINT as a graceful exit (flushing cookies & storage),
+  // whereas SIGTERM triggers SessionEnding fast-exit on Linux.
+  child.kill('SIGINT');
+  const termTimer = setTimeout(() => child.kill('SIGTERM'), 4000);
+  const killTimer = setTimeout(() => child.kill('SIGKILL'), 7000);
+  termTimer.unref();
+  killTimer.unref();
   await finished;
-  clearTimeout(timer);
+  clearTimeout(termTimer);
+  clearTimeout(killTimer);
 }
 
 async function unlinkIfSameSocket(socket: string, expected: { dev: number; ino: number } | undefined) {
