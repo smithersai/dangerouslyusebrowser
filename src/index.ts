@@ -7,3 +7,5 @@ export { listen } from './http.js';
 export type { ListenOptions } from './http.js';
 export { launch, attachProfile } from './launch.js';
 export type { LaunchOptions, ProfileAttachResult, Session, SessionHealth, SessionState } from './launch.js';
+export { installBrowser, resolveInstalledBrowser, parseSha256Sums, bundleNameFor, defaultCacheDir } from './download.js';
+export type { InstallOptions, InstallResult } from './download.js';

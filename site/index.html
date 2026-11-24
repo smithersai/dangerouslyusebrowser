@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dub — DangerouslyUseBrowser</title>
+  <meta name="description" content="A real Chromium 157 fork with native N-API bindings and an incur MCP server. NetworkService interception, per-tab isolated engine clock, and native Chromium actor + WebMCP tools.">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <a class="brand" href="#">
+        <span class="brand-name">Dub</span>
+        <span class="brand-pkg">dangerouslyusebrowser</span>
+      </a>
+      <nav aria-label="Primary">
+        <a href="#why">Why</a>
+        <a href="#quickstart">Quickstart</a>
+        <a href="#examples">Examples</a>
+        <a href="#evidence">Evidence</a>
+      </nav>
+    </header>
+
+    <main>
+      <div class="eyebrow">
+        <span class="dot" aria-hidden="true"></span>
+        <span>Chromium 157.0.8082.0 fork &middot; Linux x86-64 verified &middot; v0.1.0-alpha.1</span>
+      </div>
+
+      <h1>Chromium internals, exposed directly to agents.</h1>
+
+      <p class="lead">
+        <strong>Dub (DangerouslyUseBrowser)</strong> is a real Chromium 157 fork with native N-API bindings and an
+        <a href="https://github.com/wevm/incur">incur</a> MCP server. It is not Playwright, not a stock-CDP wrapper,
+        and not Electron.
+      </p>
+
+      <div class="arch" role="img" aria-label="Architecture: Agent to dub serve MCP to incur to TypeScript to N-API to forked Chromium">
+        Agent <span>&rarr;</span> dub serve /mcp <span>&rarr;</span> incur <span>&rarr;</span> TypeScript <span>&rarr;</span> N-API <span>&rarr;</span> forked Chromium
+      </div>
+
+      <p class="note">
+        <strong>Why &ldquo;dangerously&rdquo;:</strong> Dub runs without confirmation prompts. It defaults to a separate persistent profile and a loopback listener (<code>127.0.0.1</code>), but can attach to a real signed-in profile and act with that profile&rsquo;s authority.
+      </p>
+
+      <section id="demo-video" class="video-section" hidden>
+        <h2>Demo</h2>
+        <div class="video-frame">
+          <video id="dub-demo-player" controls playsinline preload="metadata" poster="assets/demo-01-network-rewrite.png">
+            <source src="assets/dub-demo.mp4" type="video/mp4">
+          </video>
+        </div>
+      </section>
+
+      <section id="why">
+        <h2>What a Chromium fork unlocks</h2>
+        <p>
+          Stock browser automation sits behind DevTools protocol ceilings. Dub patches Chromium directly at native C++ seams, so agents can control browser state that Playwright and stock CDP cannot reach cleanly.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Capability</th>
+                <th>What Dub does</th>
+                <th>Chromium seam</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>NetworkService interception</td>
+                <td>Mock, block, redirect, and patch decoded response bodies across tabs, dedicated/shared/service workers, <code>CacheStorage</code>, and HTTP disk cache, plus bounded <code>net log --follow</code>.</td>
+                <td><code>url_loader_request_interceptor.h</code> (browser process)</td>
+              </tr>
+              <tr>
+                <td>Per-tab isolated engine clock</td>
+                <td>Freeze, jump (including 31-day advances with bounded interval fire caps), step exact animation frames, and monotonically resume <code>Date</code>, <code>performance.now()</code>, timers, <code>rAF</code>, and CSS animations &mdash; without disturbing other tabs sharing the same renderer.</td>
+                <td>Per-tab V8 + Blink clock override</td>
+              </tr>
+              <tr>
+                <td>Native actor + WebMCP</td>
+                <td>Own a persistent profile (<code>profile attach</code>), invoke Chromium&rsquo;s native actor tools (<code>actor.click</code>, <code>actor.type</code>, <code>actor.select</code>, <code>actor.scroll</code>, <code>actor.upload_file</code>) dispatching real <code>isTrusted: true</code> events, and discover/call site-registered WebMCP tools.</td>
+                <td><code>chrome/browser/actor/tools</code> + WebMCP</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="quickstart">
+        <h2>Quickstart</h2>
+        <p>
+          Requires Node 22+ and a C++ toolchain for the native N-API bridge. Every <code>dub</code> subcommand is exposed as a typed MCP tool once the server is running; tabs, clocks, and network rules persist across calls.
+        </p>
+
+        <div class="note platform">
+          <strong>Platform availability:</strong> Compiled and verified end-to-end on <strong>Linux x86-64</strong> today.
+          <span><strong>macOS arm64</strong> binary support is coming soon (building on macOS currently compiles the Node N-API bridge/SDK only).</span>
+        </div>
+
+        <h3>1. Install Dub and fetch the Chromium fork</h3>
+        <div class="code-block">
+          <pre><code>npm i -g dangerouslyusebrowser
+dub install</code></pre>
+          <button class="copy-btn" type="button" data-copy>Copy</button>
+        </div>
+
+        <h3>2. Start the browser and MCP server</h3>
+        <div class="code-block">
+          <pre><code>dub serve --port 7777
+<span class="cm"># Serves MCP over HTTP at http://127.0.0.1:7777/mcp</span></code></pre>
+          <button class="copy-btn" type="button" data-copy>Copy</button>
+        </div>
+
+        <h3>3. Connect your MCP client</h3>
+        <div class="code-block">
+          <pre><code>claude mcp add --transport http dub http://127.0.0.1:7777/mcp</code></pre>
+          <button class="copy-btn" type="button" data-copy>Copy</button>
+        </div>
+      </section>
+
+      <section id="examples">
+        <h2>Examples</h2>
+        <p>
+          Run these directly from the CLI or let an agent invoke the matching MCP tools against the live browser session.
+        </p>
+
+        <h3>1. Rewrite the network</h3>
+        <p>
+          Point a production frontend at a local fixture, hot-patch a served JS bundle across caches and Service Workers, and follow matching traffic.
+        </p>
+        <div class="code-block">
+          <pre><code>dub net rewrite --match 'https://api.acme.com/v1/user' --status 200 --body ./fixtures/admin-user.json
+dub net patch --match '*/static/app.*.js' --replace 'retries:0' --with 'retries:3'
+dub net log --match 'api.acme.com' --follow</code></pre>
+          <button class="copy-btn" type="button" data-copy>Copy</button>
+        </div>
+
+        <h3>2. Control the clock</h3>
+        <p>
+          Freeze one tab&rsquo;s V8 and Blink clock, step CSS animations frame-by-frame for deterministic screenshots, and jump 31 days to test trial expiry without affecting neighboring tabs.
+        </p>
+        <div class="code-block">
+          <pre><code>dub clock freeze --tab 1 --at 2026-01-01T09:00:00Z
+dub clock step --tab 1 --frames 20
+dub clock advance --tab 1 --by 31d
+dub screenshot --tab 1 --out trial-expired.png</code></pre>
+          <button class="copy-btn" type="button" data-copy>Copy</button>
+        </div>
+
+        <h3>3. Act as you</h3>
+        <p>
+          Attach to a persistent profile, discover Chromium&rsquo;s native actor tools alongside page-registered WebMCP tools, and invoke both with real trusted input.
+        </p>
+        <div class="code-block">
+          <pre><code>dub profile attach --name Default
+dub tools list --tab 1
+dub tools call --tab 1 page.submit_expense --input '{"amount":42.10,"memo":"team lunch"}'
+dub tools call --tab 1 actor.click --input '{"target":"Approve"}'</code></pre>
+          <button class="copy-btn" type="button" data-copy>Copy</button>
+        </div>
+      </section>
+
+      <section id="evidence">
+        <h2>Verified evidence</h2>
+        <p>
+          Every screenshot below was captured directly from the compiled Linux x86-64 Dub Chromium <code>157.0.8082.0</code> binary during the <code>2026-11-23</code> launch verification run.
+        </p>
+
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-val">157.0.8082.0</div>
+            <div class="stat-key">Pinned Chromium</div>
+          </div>
+          <div class="stat">
+            <div class="stat-val">13 / 13</div>
+            <div class="stat-key">Bridge &amp; unit tests</div>
+          </div>
+          <div class="stat">
+            <div class="stat-val">4 / 4</div>
+            <div class="stat-key">Real-browser suites</div>
+          </div>
+          <div class="stat">
+            <div class="stat-val">3 / 3</div>
+            <div class="stat-key">Launch demos</div>
+          </div>
+        </div>
+
+        <div class="evidence-group">
+          <div class="evidence-label">
+            <strong>DEMO-01 &mdash; Rewrite the network</strong>
+            <code>net rewrite &middot; net patch &middot; net log --follow</code>
+          </div>
+          <figure>
+            <img src="assets/demo-01-network-rewrite.png" alt="Dub Demo 01 screenshot showing User role admin rewritten from a fixture and JS bundle retries patched to 3" loading="lazy">
+            <figcaption>
+              <code>/v1/user</code> rewritten to <code>role: "admin"</code> from a fixture file and <code>/static/app.123.js</code> hot-patched (<code>retries:0</code> &rarr; <code>retries:3</code>) inside Chromium&rsquo;s NetworkService.
+            </figcaption>
+          </figure>
+        </div>
+
+        <div class="evidence-group">
+          <div class="evidence-label">
+            <strong>DEMO-02 &mdash; Control the clock</strong>
+            <code>clock freeze &middot; clock step &middot; clock advance --by 31d</code>
+          </div>
+          <div class="shot-grid-3">
+            <figure>
+              <img src="assets/demo-02-trial-active.png" alt="Dub Demo 02 screenshot showing TRIAL ACTIVE on 2026-01-01 with animation box at start" loading="lazy">
+              <figcaption>Frozen at <code>2026-01-01T09:00:00Z</code>.</figcaption>
+            </figure>
+            <figure>
+              <img src="assets/demo-02-stepped-animation.png" alt="Dub Demo 02 screenshot showing CSS animation box stepped deterministically to 289.785px" loading="lazy">
+              <figcaption>Stepped 21 frames (<code>left: 289.785px</code>).</figcaption>
+            </figure>
+            <figure>
+              <img src="assets/demo-02-trial-expired.png" alt="Dub Demo 02 screenshot showing TRIAL EXPIRED on 2026-01-31 after a 31-day advance" loading="lazy">
+              <figcaption>Advanced 31 days &rarr; <code>TRIAL EXPIRED</code>.</figcaption>
+            </figure>
+          </div>
+        </div>
+
+        <div class="evidence-group">
+          <div class="evidence-label">
+            <strong>DEMO-03 &mdash; Act as you</strong>
+            <code>profile attach &middot; tools list &middot; WebMCP + actor.click</code>
+          </div>
+          <figure>
+            <img src="assets/demo-03-act-as-you.png" alt="Dub Demo 03 screenshot showing surviving session cookie signed-in:will, WebMCP expense submission, and native actor.click Approved with isTrusted=true" loading="lazy">
+            <figcaption>
+              Restarted Dub against a persistent profile with surviving cookie (<code>signed-in:will</code>), discovered 9 tools, invoked WebMCP <code>page.submit_expense</code>, and clicked Approve via native <code>actor.click</code> (<code>isTrusted=true</code>).
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span>Dub &middot; DangerouslyUseBrowser &middot; MIT License</span>
+      <span>Linux x86-64 verified &middot; macOS arm64 coming soon</span>
+    </footer>
+  </div>
+
+  <script>
+    document.querySelectorAll('[data-copy]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const code = btn.previousElementSibling.innerText;
+        navigator.clipboard.writeText(code).then(() => {
+          btn.textContent = 'Copied';
+          setTimeout(() => { btn.textContent = 'Copy'; }, 1400);
+        });
+      });
+    });
+
+    const video = document.getElementById('dub-demo-player');
+    const videoSection = document.getElementById('demo-video');
+    if (video && videoSection) {
+      video.addEventListener('loadedmetadata', () => { videoSection.hidden = false; });
+    }
+  </script>
+</body>
+</html>

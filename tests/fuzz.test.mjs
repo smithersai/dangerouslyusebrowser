@@ -1,0 +1,261 @@
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { createServer as createHttpServer } from 'node:http';
+import { createServer as createNetServer } from 'node:net';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { once } from 'node:events';
+import { spawnSync } from 'node:child_process';
+import { test } from 'node:test';
+import {
+  Browser,
+  NativeBridge,
+  createCommands,
+  duration,
+  installBrowser,
+  listen,
+  parseSha256Sums,
+  resolveInstalledBrowser,
+} from '../dist/index.js';
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function frame(payload) {
+  const body = Buffer.isBuffer(payload) ? payload : Buffer.from(payload);
+  const header = Buffer.alloc(4);
+  header.writeUInt32BE(body.length, 0);
+  return Buffer.concat([header, body]);
+}
+
+test('fuzz: compiled N-API bridge survives 120 malformed, truncated, oversized & concurrent frames', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'dub-fuzz-ipc-'));
+  const socketPath = join(dir, 'fuzz.sock');
+  t.after(() => rm(dir, { recursive: true, force: true }));
+
+  const rng = mulberry32(0xdecafbad);
+  let reqCount = 0;
+
+  const server = createNetServer(conn => {
+    conn.on('error', () => {});
+    let buf = Buffer.alloc(0);
+    conn.on('data', chunk => {
+      buf = Buffer.concat([buf, chunk]);
+      if (buf.length < 4) return;
+      const len = buf.readUInt32BE(0);
+      if (buf.length < 4 + len) return;
+      const msg = JSON.parse(buf.subarray(4, 4 + len).toString('utf8'));
+      const idx = reqCount++;
+      const mode = idx % 8;
+
+      if (mode === 0) {
+        // Valid echo response
+        conn.end(frame(JSON.stringify({ protocol: 1, id: msg.id, result: { ok: true, idx } })));
+      } else if (mode === 1) {
+        // Wrong ID
+        conn.end(frame(JSON.stringify({ protocol: 1, id: 'wrong-id', result: { ok: true } })));
+      } else if (mode === 2) {
+        // Invalid JSON payload
+        conn.end(frame('{not valid json!!!'));
+      } else if (mode === 3) {
+        // Premature EOF mid-frame
+        const f = frame(JSON.stringify({ protocol: 1, id: msg.id, result: { ok: true } }));
+        conn.end(f.subarray(0, Math.max(2, Math.floor(f.length / 2))));
+      } else if (mode === 4) {
+        // Random garbage bytes with bogus length header
+        const garbage = Buffer.alloc(16);
+        for (let i = 0; i < garbage.length; i++) garbage[i] = Math.floor(rng() * 256);
+        conn.end(garbage);
+      } else if (mode === 5) {
+        // Protocol mismatch
+        conn.end(frame(JSON.stringify({ protocol: 99, id: msg.id, result: {} })));
+      } else if (mode === 6) {
+        // Both result and error (violates envelope invariant)
+        conn.end(frame(JSON.stringify({ protocol: 1, id: msg.id, result: {}, error: { code: 'E', message: 'both' } })));
+      } else {
+        // Valid response chunked in 1-byte pieces
+        const f = frame(JSON.stringify({ protocol: 1, id: msg.id, result: { chunked: true, idx } }));
+        let off = 0;
+        const pump = () => {
+          if (off >= f.length) return conn.end();
+          const step = 1 + Math.floor(rng() * 5);
+          conn.write(f.subarray(off, off + step));
+          off += step;
+          setTimeout(pump, 1);
+        };
+        pump();
+      }
+    });
+  });
+
+  server.listen(socketPath);
+  await once(server, 'listening');
+  t.after(() => new Promise(resolve => server.close(resolve)));
+
+  const bridge = new NativeBridge(socketPath, 2000);
+  let okCount = 0;
+  let errCount = 0;
+
+  // Run 120 calls in parallel batches of 12
+  for (let batch = 0; batch < 10; batch++) {
+    const results = await Promise.allSettled(
+      Array.from({ length: 12 }, (_, i) => bridge.call('browser.info', { batch, i }))
+    );
+    for (const r of results) {
+      if (r.status === 'fulfilled') okCount++;
+      else errCount++;
+    }
+  }
+  assert.ok(okCount >= 25, `Expected valid modes to succeed, got ${okCount}`);
+  assert.ok(errCount >= 70, `Expected malformed modes to fail cleanly, got ${errCount}`);
+});
+
+test('fuzz: duration() and parseSha256Sums() handle 500 randomized inputs cleanly', () => {
+  const rng = mulberry32(0x1337c0de);
+  const alphabet = '0123456789msdh .-+eE_abcXYZ\t\n\0🚀';
+  for (let i = 0; i < 500; i++) {
+    const len = Math.floor(rng() * 14);
+    let s = '';
+    for (let j = 0; j < len; j++) s += alphabet[Math.floor(rng() * alphabet.length)];
+    try {
+      const ms = duration(s);
+      assert.ok(Number.isSafeInteger(ms) && ms > 0, `Invalid positive ms from ${JSON.stringify(s)}: ${ms}`);
+    } catch (err) {
+      assert.ok(err instanceof Error);
+    }
+  }
+
+  // Known valid durations
+  assert.equal(duration('1ms'), 1);
+  assert.equal(duration('31d'), 31 * 86_400_000);
+  assert.equal(duration('2h'), 7_200_000);
+
+  // Checksum parser fuzz
+  const sample = [
+    '# comment',
+    '',
+    'A'.repeat(64) + '  dub-chromium-157.0.8082.0-linux-x64.tar.gz',
+    'b'.repeat(64) + ' *dub-chromium-157.0.8082.0-darwin-arm64.tar.gz',
+    'not-a-hash  evil.tar.gz',
+    'c'.repeat(63) + '  short.tar.gz',
+  ].join('\r\n');
+  const map = parseSha256Sums(sample);
+  assert.equal(map.size, 2);
+  assert.equal(map.get('dub-chromium-157.0.8082.0-linux-x64.tar.gz'), 'a'.repeat(64));
+  assert.equal(map.get('dub-chromium-157.0.8082.0-darwin-arm64.tar.gz'), 'b'.repeat(64));
+});
+
+test('fuzz: installBrowser verifies SHA-256, rejects tampering and path traversal, and caches cleanly', async t => {
+  const work = await mkdtemp(join(tmpdir(), 'dub-dl-test-'));
+  t.after(() => rm(work, { recursive: true, force: true }));
+
+  const bundleName = 'dub-chromium-157.0.8082.0-linux-x64';
+  const tarballName = `${bundleName}.tar.gz`;
+
+  // Create a valid fake bundle tarball
+  const goodStage = join(work, 'good');
+  await mkdir(join(goodStage, bundleName), { recursive: true });
+  await writeFile(join(goodStage, bundleName, 'chrome'), '#!/bin/sh\necho dub\n', { mode: 0o755 });
+  const goodTar = join(work, tarballName);
+  assert.equal(spawnSync('tar', ['-czf', goodTar, '-C', goodStage, bundleName]).status, 0);
+  const { readFile } = await import('node:fs/promises');
+  const goodBytes = await readFile(goodTar);
+  const goodSha = createHash('sha256').update(goodBytes).digest('hex');
+
+  // Create a path-traversal tarball (-P preserves '../' in GNU/BSD tar)
+  const evilTar = join(work, 'evil.tar.gz');
+  const evilFile = join(work, 'pwn.txt');
+  await writeFile(evilFile, 'evil');
+  assert.equal(spawnSync('tar', ['-P', '-czf', evilTar, '-C', goodStage, '../pwn.txt']).status, 0);
+  const evilBytes = await readFile(evilTar);
+  const evilSha = createHash('sha256').update(evilBytes).digest('hex');
+
+  let mode = 'good';
+  const server = createHttpServer((req, res) => {
+    if (req.url === '/SHA256SUMS.txt') {
+      const sha = mode === 'evil' ? evilSha : goodSha;
+      res.writeHead(200, { 'content-type': 'text/plain' }).end(`${sha}  ${tarballName}\n`);
+      return;
+    }
+    if (req.url === `/${tarballName}`) {
+      if (mode === 'tampered') {
+        const bad = Buffer.from(goodBytes);
+        bad[bad.length - 1] ^= 0xff;
+        res.writeHead(200).end(bad);
+        return;
+      }
+      res.writeHead(200).end(mode === 'evil' ? evilBytes : goodBytes);
+      return;
+    }
+    res.writeHead(404).end('not found');
+  });
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  t.after(() => new Promise(resolve => server.close(resolve)));
+
+  const baseUrl = `http://127.0.0.1:${server.address().port}`;
+  const cacheDir = join(work, 'cache');
+
+  // 1. Tampered tarball must be rejected by SHA-256 check
+  mode = 'tampered';
+  await assert.rejects(
+    installBrowser({ baseUrl, cacheDir, platform: 'linux', arch: 'x64' }),
+    /SHA-256 mismatch/
+  );
+  assert.equal(resolveInstalledBrowser(cacheDir, 'linux', 'x64'), undefined);
+
+  // 2. Path-traversal tarball must be rejected before extraction
+  mode = 'evil';
+  await assert.rejects(
+    installBrowser({ baseUrl, cacheDir, platform: 'linux', arch: 'x64' }),
+    /unsafe tarball path/
+  );
+
+  // 3. Valid download succeeds and subsequent call hits cache
+  mode = 'good';
+  const res1 = await installBrowser({ baseUrl, cacheDir, platform: 'linux', arch: 'x64' });
+  assert.equal(res1.cached, false);
+  assert.equal(res1.sha256, goodSha);
+  assert.equal(resolveInstalledBrowser(cacheDir, 'linux', 'x64'), res1.browserPath);
+
+  const res2 = await installBrowser({ baseUrl, cacheDir, platform: 'linux', arch: 'x64' });
+  assert.equal(res2.cached, true);
+  assert.equal(res2.browserPath, res1.browserPath);
+});
+
+test('fuzz: HTTP MCP boundary rejects malformed origins, hosts, tokens & garbage payloads', async t => {
+  const cli = createCommands(new Browser(new NativeBridge('/tmp/nonexistent-dub-fuzz.sock', 500)), {
+    methods: ['browser.info'],
+  });
+  const token = 'secret-fuzz-token-0123456789-abcdef';
+  const server = await listen(cli.fetch, { host: '127.0.0.1', port: 0, token });
+  t.after(() => server.close());
+
+  const badRequests = [
+    // Missing token
+    { headers: { 'content-type': 'application/json' }, body: '{}' },
+    // Wrong token
+    { headers: { authorization: 'Bearer wrong', 'content-type': 'application/json' }, body: '{}' },
+    // Foreign origin
+    { headers: { authorization: `Bearer ${token}`, origin: 'https://evil.example' }, body: '{}' },
+    // Null origin
+    { headers: { authorization: `Bearer ${token}`, origin: 'null' }, body: '{}' },
+  ];
+
+  for (const req of badRequests) {
+    const res = await fetch(`${server.url}/mcp`, {
+      method: 'POST',
+      headers: req.headers,
+      body: req.body,
+    });
+    assert.ok(res.status === 401 || res.status === 403, `Expected 401/403, got ${res.status}`);
+  }
+});

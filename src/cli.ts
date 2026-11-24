@@ -1,11 +1,23 @@
 import { z } from 'incur';
 import { Browser } from './browser.js';
 import { createCommands } from './commands.js';
+import { installBrowser } from './download.js';
 import { listen } from './http.js';
 import { launch } from './launch.js';
 
 export async function main(argv = process.argv.slice(2)) {
   const cli = createCommands(new Browser());
+  cli.command('install', {
+    description: 'Download and SHA-256 verify the Dub Chromium binary for this platform',
+    mcp: false,
+    options: z.object({
+      release: z.string().optional().describe('Release tag to download (default: v0.1.0-alpha.1)'),
+      baseUrl: z.string().url().optional().describe('Override release base URL'),
+      cacheDir: z.string().optional().describe('Override browser cache directory'),
+      force: z.boolean().default(false).describe('Re-download even if already cached'),
+    }),
+    run: c => installBrowser(c.options),
+  });
   cli.command('serve', {
     description: 'Start the fork and serve MCP at /mcp', mcp: false,
     options: z.object({

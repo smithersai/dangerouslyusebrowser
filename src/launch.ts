@@ -4,6 +4,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Browser, type BrowserInfo } from './browser.js';
+import { resolveInstalledBrowser } from './download.js';
 import { defaultSocket, NativeBridge } from './native.js';
 
 export type SessionState = 'starting' | 'ready' | 'stopping' | 'stopped' | 'failed';
@@ -61,8 +62,8 @@ export async function launch(options: LaunchOptions = {}): Promise<Session> {
       close: async () => { state = 'stopped'; },
     };
   }
-  const executable = options.browser ?? process.env.DUB_BROWSER;
-  if (!executable) throw new Error('Set DUB_BROWSER or --browser to a compiled Dub Chromium executable. See docs/build.md.');
+  const executable = options.browser ?? process.env.DUB_BROWSER ?? resolveInstalledBrowser();
+  if (!executable) throw new Error('Dub Chromium binary not found. Run "dub install" or set DUB_BROWSER=/path/to/chrome.');
   const executablePath = await realpath(executable);
   if (Buffer.byteLength(socket) > (process.platform === 'darwin' ? 103 : 107)) throw new Error('Socket path is too long; set DUB_SOCKET to a shorter path');
   await mkdir(dirname(socket), { recursive: true, mode: 0o700 });

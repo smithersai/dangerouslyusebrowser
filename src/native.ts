@@ -11,8 +11,22 @@ const envelope = z.object({
 type Addon = { request(path: string, json: string, timeout: number): Promise<string> };
 let addon: Addon | undefined;
 function binding(): Addon {
-  try { return addon ??= createRequire(import.meta.url)('../build/Release/dub.node') as Addon; }
-  catch (cause) { throw new Error('Dub native binding is missing. Run npm run build:native in the Dub installation.', { cause }); }
+  if (addon) return addon;
+  const req = createRequire(import.meta.url);
+  const candidates = [
+    '../build/Release/dub.node',
+    `../prebuilds/${process.platform}-${process.arch}/dub.node`,
+  ];
+  let lastError: unknown;
+  for (const candidate of candidates) {
+    try {
+      addon = req(candidate) as Addon;
+      return addon;
+    } catch (cause) {
+      lastError = cause;
+    }
+  }
+  throw new Error('Dub native binding is missing. Run npm run build:native in the Dub installation.', { cause: lastError });
 }
 export const defaultSocket = () => process.env.DUB_SOCKET || join(homedir(), '.dub', 'browser.sock');
 export class DubError extends Error {

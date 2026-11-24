@@ -1,0 +1,164 @@
+{
+  "generatedAt": "2026-11-24T18:53:35.598Z",
+  "uc1": {
+    "beforeState": {
+      "retries": 0,
+      "role": "viewer",
+      "swControlled": true
+    },
+    "afterState": {
+      "retries": 3,
+      "role": "admin",
+      "swControlled": true
+    },
+    "shots": [
+      {
+        "filename": "uc1-before.png",
+        "bytes": 61083,
+        "sha256": "58bc0196f589"
+      },
+      {
+        "filename": "uc1-after.png",
+        "bytes": 66191,
+        "sha256": "b21561b323f3"
+      }
+    ]
+  },
+  "uc2": {
+    "tab1Result": {
+      "expiryIso": "2026-01-31T09:00:00.000Z",
+      "modalOpen": true,
+      "nowIso": "2026-02-01T09:00:01.000Z"
+    },
+    "tab2StartIso": "2026-11-24T18:53:25.100Z",
+    "tab2EndIso": "2026-11-24T18:53:27.296Z",
+    "shots": [
+      {
+        "filename": "uc2-tab1-frozen.png",
+        "bytes": 59789,
+        "sha256": "ef0a7e80083b"
+      },
+      {
+        "filename": "uc2-tab1-step-01.png",
+        "bytes": 61872,
+        "sha256": "98255cb28318",
+        "left": "67.501px"
+      },
+      {
+        "filename": "uc2-tab1-step-02.png",
+        "bytes": 62198,
+        "sha256": "74182efaa231",
+        "left": "119.024px"
+      },
+      {
+        "filename": "uc2-tab1-step-03.png",
+        "bytes": 64108,
+        "sha256": "0cbabda0b91f",
+        "left": "170.503px"
+      },
+      {
+        "filename": "uc2-tab1-step-04.png",
+        "bytes": 65426,
+        "sha256": "ee5a214e48ea",
+        "left": "222.004px"
+      },
+      {
+        "filename": "uc2-tab1-step-05.png",
+        "bytes": 67873,
+        "sha256": "9f2eb9248199",
+        "left": "273.505px"
+      },
+      {
+        "filename": "uc2-tab1-step-06.png",
+        "bytes": 69251,
+        "sha256": "29b568975dee",
+        "left": "325.006px"
+      },
+      {
+        "filename": "uc2-tab1-step-07.png",
+        "bytes": 72622,
+        "sha256": "99085008af49",
+        "left": "376.544px"
+      },
+      {
+        "filename": "uc2-tab1-step-08.png",
+        "bytes": 74791,
+        "sha256": "39dcd38e9586",
+        "left": "428.024px"
+      },
+      {
+        "filename": "uc2-tab1-step-09.png",
+        "bytes": 77428,
+        "sha256": "75cbf8d829d3",
+        "left": "479.509px"
+      },
+      {
+        "filename": "uc2-tab1-step-10.png",
+        "bytes": 79474,
+        "sha256": "fd4a8c0b8a82",
+        "left": "531.044px"
+      },
+      {
+        "filename": "uc2-tab1-step-11.png",
+        "bytes": 81317,
+        "sha256": "322dd991d772",
+        "left": "582.524px"
+      },
+      {
+        "filename": "uc2-tab1-step-12.png",
+        "bytes": 82127,
+        "sha256": "e2e511ba3846",
+        "left": "634px"
+      },
+      {
+        "filename": "uc2-tab1-expired.png",
+        "bytes": 72600,
+        "sha256": "eab9b77046c4"
+      },
+      {
+        "filename": "uc2-tab2-start.png",
+        "bytes": 18924,
+        "sha256": "77b5c5eec036"
+      },
+      {
+        "filename": "uc2-tab2-live.png",
+        "bytes": 18783,
+        "sha256": "70276c185657"
+      }
+    ]
+  },
+  "uc3": {
+    "toolNames": [
+      "actor.click",
+      "actor.type",
+      "actor.scroll",
+      "actor.select",
+      "actor.drag",
+      "actor.navigate",
+      "actor.switch_tab",
+      "actor.upload_file",
+      "page.submit_expense"
+    ],
+    "state": {
+      "approvedTrusted": true,
+      "session": "Signed in: will@acme.io (Persisted Profile)"
+    },
+    "shots": [
+      {
+        "filename": "uc3-1-signed-in.png",
+        "bytes": 66351,
+        "sha256": "6635ed2ef51f"
+      },
+      {
+        "filename": "uc3-2-submitted.png",
+        "bytes": 66035,
+        "sha256": "afd1907a4eb1"
+      },
+      {
+        "filename": "uc3-3-approved.png",
+        "bytes": 66970,
+        "sha256": "3f8cf6741ad7"
+      }
+    ]
+  }
+}

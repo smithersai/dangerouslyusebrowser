@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
@@ -12,4 +12,10 @@ const args = ['-std=c++20', '-O2', '-Wall', '-Wextra', '-Werror', '-fPIC', '-sha
 if (process.platform === 'darwin') args.push('-undefined', 'dynamic_lookup');
 const result = spawnSync(process.env.CXX || 'c++', args, { cwd: root, stdio: 'inherit' });
 if (result.error) throw result.error;
-process.exitCode = result.status ?? 1;
+if (result.status !== 0) {
+  process.exitCode = result.status ?? 1;
+} else if (process.argv.includes('--prebuild')) {
+  const prebuildDir = resolve(root, `prebuilds/${process.platform}-${process.arch}`);
+  mkdirSync(prebuildDir, { recursive: true });
+  copyFileSync(resolve(root, 'build/Release/dub.node'), resolve(prebuildDir, 'dub.node'));
+}
