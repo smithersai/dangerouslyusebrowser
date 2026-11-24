@@ -1,0 +1,70 @@
+{
+  "generatedAt": "2026-11-24T06:49:58.152Z",
+  "startedAt": "2026-11-24T06:49:49.839Z",
+  "platform": "linux",
+  "arch": "x64",
+  "nodeVersion": "v22.23.5",
+  "demos": [
+    {
+      "id": "DEMO-01",
+      "passed": true,
+      "observedState": {
+        "retries": 3,
+        "role": "admin"
+      },
+      "logEntries": 4,
+      "screenshots": [
+        {
+          "filename": "demo-01-network-rewrite.png",
+          "bytes": 19211,
+          "sha256": "e965572ad83df683211d44ff07cbf931f237ac793c73ff51c4470cbf62d1277c"
+        }
+      ]
+    },
+    {
+      "id": "DEMO-02",
+      "passed": true,
+      "boxLeftAfterStep": "289.785px",
+      "observedState": {
+        "banner": "TRIAL EXPIRED — 2026-01-31",
+        "expiryIso": "2026-01-31T09:00:00.000Z",
+        "nowIso": "2026-02-01T09:00:00.350Z"
+      },
+      "screenshots": [
+        {
+          "filename": "demo-02-trial-active.png",
+          "bytes": 8261,
+          "sha256": "1a329b311203e6ee4bc4689ab9e1d7dc4bf083348f4f8fd18ef0317058290329"
+        },
+        {
+          "filename": "demo-02-stepped-animation.png",
+          "bytes": 8267,
+          "sha256": "f93414a36e200da4115c68fcf0aec5ddd597b4e0f7cba29cf39042e4aebea5f6"
+        },
+        {
+          "filename": "demo-02-trial-expired.png",
+          "bytes": 8124,
+          "sha256": "3dccee929a8e22cef853fd885183500554f85c90fa22b672d9ede60013e06523"
+        }
+      ]
+    },
+    {
+      "id": "DEMO-03",
+      "passed": true,
+      "discoveredToolsCount": 9,
+      "observedState": {
+        "approval": "Approved (isTrusted=true)",
+        "approvedTrusted": true,
+        "expense": "Submitted $42.10 — team lunch",
+        "session": "signed-in:will"
+      },
+      "screenshots": [
+        {
+          "filename": "demo-03-act-as-you.png",
+          "bytes": 32589,
+          "sha256": "38b752a18f310a7d1cca2218afc5922e2386bf3f3348beddabfd0c82e415ab09"
+        }
+      ]
+    }
+  ]
+}
