@@ -25,7 +25,11 @@ export class NativeBridge {
   async call<T = unknown>(method: string, params: Record<string, unknown> = {}): Promise<T> {
     if (!/^[a-z][a-z0-9_.]*$/.test(method)) throw new TypeError('Invalid native method name');
     const id = randomUUID();
-    const reply = envelope.parse(JSON.parse(await binding().request(this.socket, JSON.stringify({ protocol: 1, id, method, params }), this.timeoutMs)));
+    const reply = envelope.parse(JSON.parse(await binding().request(
+      this.socket,
+      JSON.stringify({ protocol: 1, id, method, params, timeoutMs: this.timeoutMs }),
+      this.timeoutMs
+    )));
     if (reply.id !== id) throw new DubError('PROTOCOL', 'Dub response ID did not match the request');
     if (reply.error) throw new DubError(reply.error.code, reply.error.message);
     return reply.result as T;

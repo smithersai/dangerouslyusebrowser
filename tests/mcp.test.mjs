@@ -84,3 +84,30 @@ test('durations preserve milliseconds and reject ambiguous inputs', () => {
   assert.equal(duration('31d'), 2678400000); assert.equal(duration('1.5s'), 1500);
   for (const bad of ['1', '0ms', '-1s', '1year', '0.1ms', 'Infinitys', '999999999999999d']) assert.throws(() => duration(bad));
 });
+test('capability handshake gates MCP tool catalog and /health reflects session state', async t => {
+  const f = await bridgeFixture(t, req => ({ result: { ok: true, timeoutMs: req.timeoutMs } }));
+  let ok = true;
+  const server = await listen(
+    createCommands(f.browser, { methods: ['browser.info', 'tabs.list', 'tools.call'] }).fetch,
+    { port: 0, health: () => ({ ok, state: ok ? 'ready' : 'failed' }) }
+  );
+  t.after(() => server.close());
+  assert.equal((await fetch(`${server.url}/health`)).status, 200);
+  ok = false;
+  const unhealthy = await fetch(`${server.url}/health`);
+  assert.equal(unhealthy.status, 503);
+  assert.match(await unhealthy.text(), /"state":"failed"/);
+
+  const client = new Client({ name: 'dub-caps', version: '1' });
+  await client.connect(new StreamableHTTPClientTransport(new URL(`${server.url}/mcp`))); t.after(() => client.close());
+  const names = new Set((await client.listTools()).tools.map(tool => tool.name));
+  assert.ok(names.has('status'));
+  assert.ok(names.has('tabs_list'));
+  assert.ok(names.has('tools_call'));
+  assert.ok(!names.has('clock_advance'));
+  assert.ok(!names.has('net_mock'));
+  assert.ok(!names.has('evaluate'));
+
+  await f.browser.tabs();
+  assert.equal(f.calls.at(-1).timeoutMs, 30000);
+});

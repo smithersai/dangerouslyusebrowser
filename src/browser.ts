@@ -3,7 +3,8 @@ import { z } from 'incur';
 
 export const browserInfo = z.object({
   product: z.literal('Dub'), protocol: z.literal(1), chromium: z.string(), revision: z.string(),
-  methods: z.array(z.string()), profile: z.string(),
+  buildId: z.string().optional(), instanceId: z.string().optional(),
+  methods: z.array(z.string()), tools: z.array(z.string()).optional(), profile: z.string(),
 });
 export type BrowserInfo = z.infer<typeof browserInfo>;
 export type Tab = { id: number; url: string; title: string; active: boolean; loading: boolean };

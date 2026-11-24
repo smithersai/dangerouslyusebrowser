@@ -19,7 +19,14 @@ async function body(req: IncomingMessage) {
   }
   return Buffer.concat(chunks);
 }
-export async function listen(fetch: (req: Request) => Promise<Response>, options: { host?: string; port?: number; token?: string } = {}) {
+export type ListenOptions = {
+  host?: string;
+  port?: number;
+  token?: string;
+  allowedHosts?: string[];
+  health?: () => { ok: boolean; [key: string]: unknown };
+};
+export async function listen(fetch: (req: Request) => Promise<Response>, options: ListenOptions = {}) {
   const host = options.host ?? '127.0.0.1';
   if (!isLoopback(host) && !options.token) throw new Error('Non-loopback listeners require DUB_TOKEN');
   if (options.token !== undefined && options.token.length < 24) throw new Error('DUB_TOKEN must contain at least 24 characters');
@@ -36,7 +43,11 @@ export async function listen(fetch: (req: Request) => Promise<Response>, options
       }
       if (options.token && !authorized(req.headers.authorization, options.token)) { res.writeHead(401, { 'www-authenticate': 'Bearer' }).end('Unauthorized'); return; }
       const pathname = new URL(req.url ?? '/', origin).pathname;
-      if (pathname === '/health' && req.method === 'GET') { res.writeHead(200, { 'content-type': 'application/json' }).end('{"product":"Dub","ok":true}'); return; }
+      if (pathname === '/health' && req.method === 'GET') {
+        const status = options.health ? options.health() : { ok: true };
+        res.writeHead(status.ok ? 200 : 503, { 'content-type': 'application/json' }).end(JSON.stringify({ product: 'Dub', ...status }));
+        return;
+      }
       const headers = new Headers();
       for (const [key, value] of Object.entries(req.headers)) if (value) headers.set(key, Array.isArray(value) ? value.join(', ') : value);
       const controller = new AbortController();
@@ -61,5 +72,11 @@ export async function listen(fetch: (req: Request) => Promise<Response>, options
   origin = `http://${host.includes(':') ? `[${host}]` : host}:${address.port}`;
   allowedHosts = new Set([new URL(origin).host]);
   if (isLoopback(host)) for (const h of ['127.0.0.1', 'localhost', '[::1]']) allowedHosts.add(`${h}:${address.port}`);
+  if (options.allowedHosts) {
+    for (const h of options.allowedHosts) {
+      const normalized = h.toLowerCase();
+      allowedHosts.add(normalized.includes(':') ? normalized : `${normalized}:${address.port}`);
+    }
+  }
   return { url: origin, async close() { server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(e => e ? reject(e) : resolve())); } };
 }

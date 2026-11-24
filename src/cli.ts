@@ -16,16 +16,25 @@ export async function main(argv = process.argv.slice(2)) {
     async run(c) {
       const session = await launch(c.options);
       try {
-        const server = await listen(createCommands(session.browser).fetch, { ...c.options, token: process.env.DUB_TOKEN });
+        const capabilities = { methods: session.info.methods, tools: session.info.tools };
+        const server = await listen(createCommands(session.browser, capabilities).fetch, {
+          ...c.options,
+          token: process.env.DUB_TOKEN,
+          health: () => session.health(),
+        });
         let stopping = false;
         const stop = async () => {
           if (stopping) return; stopping = true;
-          try { await server.close(); await session.close(); }
+          try { await server.close(); }
           catch (error) { console.error(error); process.exitCode = 1; }
+          finally {
+            try { await session.close(); }
+            catch (error) { console.error(error); process.exitCode = 1; }
+          }
           process.removeListener('SIGINT', stop); process.removeListener('SIGTERM', stop);
         };
         process.once('SIGINT', stop); process.once('SIGTERM', stop);
-        return { endpoint: `${server.url}/mcp`, socket: session.browser.native.socket, browser: await session.browser.info() };
+        return { endpoint: `${server.url}/mcp`, socket: session.browser.native.socket, browser: session.info };
       } catch (error) { await session.close(); throw error; }
     },
   });

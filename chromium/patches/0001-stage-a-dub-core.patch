@@ -1,0 +1,131 @@
+diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
+index 1111111111111..2222222222222 100644
+--- a/chrome/browser/BUILD.gn
++++ b/chrome/browser/BUILD.gn
+@@ -2016,8 +2016,24 @@ source_set("core") {
+     deps += [
+       "//chrome/browser/request_header_integrity",
+       "//chrome/common/request_header_integrity",
+     ]
+   }
++
++  if (is_linux || is_mac) {
++    sources += [
++      "dub/dub_build_info.h",
++      "dub/dub_dispatch.cc",
++      "dub/dub_dispatch.h",
++      "dub/dub_server.cc",
++      "dub/dub_server.h",
++    ]
++    deps += [
++      "//chrome/browser/profiles/keep_alive",
++      "//chrome/common:mojo_bindings",
++      "//components/tabs:public",
++      "//components/version_info",
++    ]
++  }
+ }
+ 
+ # This target no longer has any sources of its own; it only aggregates
+diff --git a/chrome/browser/chrome_browser_main.cc b/chrome/browser/chrome_browser_main.cc
+index 1111111111111..2222222222222 100644
+--- a/chrome/browser/chrome_browser_main.cc
++++ b/chrome/browser/chrome_browser_main.cc
+@@ -38,6 +38,9 @@
+ #include "chrome/browser/component_updater/registration.h"
+ #include "chrome/browser/enterprise/browser_management/management_service_factory.h"
+ #include "chrome/browser/enterprise/chrome_browser_main_extra_parts_enterprise.h"
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC)
++#include "chrome/browser/dub/dub_server.h"
++#endif
+ #include "chrome/browser/first_run/bookmark_importer.h"
+ #include "chrome/browser/first_run/first_run_features.h"
+ #include "chrome/browser/gpu/chrome_browser_main_extra_parts_gpu.h"
+@@ -1765,6 +1768,9 @@ void ChromeBrowserMainParts::PostBrowserStart() {
+   }
+ #endif
+   AfterStartupTaskUtils::BeginMonitoringStartupCompletion();
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC)
++  dub::StartServer();
++#endif
+ }
+ 
+ int ChromeBrowserMainParts::PreMainMessageLoopRunImpl() {
+@@ -2231,6 +2237,9 @@ void ChromeBrowserMainParts::PostMainMessageLoopRun() {
+   // Android specific MessageLoop
+   NOTREACHED();
+ #else
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC)
++  dub::StopServer();
++#endif
+   // Shutdown the UpgradeDetector here before `ChromeBrowserMainPartsAsh`
+   // disconnects DBus services in its PostDestroyThreads.
+   UpgradeDetector::GetInstance()->Shutdown();
+diff --git a/chrome/browser/profiles/keep_alive/profile_keep_alive_types.cc b/chrome/browser/profiles/keep_alive/profile_keep_alive_types.cc
+index 1111111111111..2222222222222 100644
+--- a/chrome/browser/profiles/keep_alive/profile_keep_alive_types.cc
++++ b/chrome/browser/profiles/keep_alive/profile_keep_alive_types.cc
+@@ -106,6 +106,8 @@ std::ostream& operator<<(std::ostream& out,
+       return out << "kFetchKeepAlive";
+     case ProfileKeepAliveOrigin::kOmniboxEverywhere:
+       return out << "kOmniboxEverywhere";
++    case ProfileKeepAliveOrigin::kDubServer:
++      return out << "kDubServer";
+   }
+   NOTREACHED();
+ }
+diff --git a/chrome/browser/profiles/keep_alive/profile_keep_alive_types.h b/chrome/browser/profiles/keep_alive/profile_keep_alive_types.h
+index 1111111111111..2222222222222 100644
+--- a/chrome/browser/profiles/keep_alive/profile_keep_alive_types.h
++++ b/chrome/browser/profiles/keep_alive/profile_keep_alive_types.h
+@@ -257,7 +257,10 @@ enum class ProfileKeepAliveOrigin {
+   // alive.
+   kOmniboxEverywhere = 46,
+ 
+-  kMaxValue = kOmniboxEverywhere,
++  // Used by the Dub native control server to retain its selected profile.
++  kDubServer = 47,
++
++  kMaxValue = kDubServer,
+ };
+ // LINT.ThenChange(/tools/metrics/histograms/metadata/profile/enums.xml)
+ 
+diff --git a/components/keep_alive_registry/keep_alive_types.cc b/components/keep_alive_registry/keep_alive_types.cc
+index 1111111111111..2222222222222 100644
+--- a/components/keep_alive_registry/keep_alive_types.cc
++++ b/components/keep_alive_registry/keep_alive_types.cc
+@@ -162,6 +162,8 @@ std::ostream& operator<<(std::ostream& out, const KeepAliveOrigin& origin) {
+       return out << "FETCH_KEEPALIVE_REQUEST";
+     case KeepAliveOrigin::ISOLATION_STATE_CHANGE:
+       return out << "ISOLATION_STATE_CHANGE";
++    case KeepAliveOrigin::DUB_SERVER:
++      return out << "DUB_SERVER";
+   }
+ 
+   NOTREACHED() << static_cast<int>(origin);
+diff --git a/components/keep_alive_registry/keep_alive_types.h b/components/keep_alive_registry/keep_alive_types.h
+index 1111111111111..2222222222222 100644
+--- a/components/keep_alive_registry/keep_alive_types.h
++++ b/components/keep_alive_registry/keep_alive_types.h
+@@ -161,6 +161,9 @@ enum class KeepAliveOrigin {
+ 
+   // c/b/win
+   ISOLATION_STATE_CHANGE,
++
++  // c/b/dub
++  DUB_SERVER,
+ };
+ 
+ // Restart: Allow Chrome to restart when all the registered KeepAlives allow
+diff --git a/tools/metrics/histograms/metadata/profile/enums.xml b/tools/metrics/histograms/metadata/profile/enums.xml
+index 1111111111111..2222222222222 100644
+--- a/tools/metrics/histograms/metadata/profile/enums.xml
++++ b/tools/metrics/histograms/metadata/profile/enums.xml
+@@ -430,6 +430,7 @@
+   <int value="44" label="kWebAppDatabaseCorruptionRecovery"/>
+   <int value="45" label="kFetchKeepAlive"/>
+   <int value="46" label="kOmniboxEverywhere"/>
++  <int value="47" label="kDubServer"/>
+ </enum>
+ 
+ <!-- LINT.IfChange(ProfileLockStatus) -->
