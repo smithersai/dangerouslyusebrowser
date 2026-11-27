@@ -1,0 +1,56 @@
+name: Uphill Lighthouse Audit
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "0 14 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: Lighthouse Backpressure Audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Uphill
+        run: |
+          curl -fsSL https://wevm.sh/uphill | sh
+          echo "$HOME/.uphill/bin" >> "$GITHUB_PATH"
+      - name: Validate metric scripts
+        run: uphill check
+      - name: Run Uphill backpressure and generate Lighthouse UI
+        run: |
+          uphill --compact
+          node scripts/build-audit-report.mjs
+      - name: Publish Lighthouse summary
+        if: always()
+        run: |
+          if [ -f .uphill/comment.md ]; then
+            cat .uphill/comment.md >> "$GITHUB_STEP_SUMMARY"
+          elif [ -f .uphill/report.md ]; then
+            cat .uphill/report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload Lighthouse Audit Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dub-lighthouse-audit
+          path: |
+            .uphill/report.json
+            .uphill/report.md
+            .uphill/report.html
+            site/audit.html
+          retention-days: 30

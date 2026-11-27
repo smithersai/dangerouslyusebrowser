@@ -1,0 +1,71 @@
+# Each measurement's `baseline`, the size, count, or check `uphill --update` accepted, and its
+# `target`. Edit a target here, and each run reports what changed since the baseline.
+
+bridge-safety:
+  cpp-no-abort:
+    "*": { baseline: pass }
+  cpp-strict-flags:
+    "*": { baseline: pass }
+  overlay-integrity:
+    "*": { baseline: pass }
+  no-private-leaks:
+    "*": { baseline: pass }
+
+typescript-quality:
+  ts-no-explicit-any:
+    "*": { baseline: pass }
+  ts-no-suppressions:
+    "*": { baseline: pass }
+  ts-no-console-log:
+    "*": { baseline: pass }
+  ts-max-fn-lines:
+    "*": { target: 110 }
+    src/agent-bridge.ts: { baseline: 25 }
+    src/auth.ts: { baseline: 79 }
+    src/browser.ts: { baseline: 32 }
+    src/cli.ts: { baseline: 54 }
+    src/commands.ts: { baseline: 87 }
+    src/download.ts: { baseline: 72 }
+    src/http.ts: { baseline: 77 }
+    src/index.ts: { baseline: 1 }
+    src/jev.ts: { baseline: 40 }
+    src/launch.ts: { baseline: 104 }
+    src/native.ts: { baseline: 18 }
+    src/plugins.ts: { baseline: 64 }
+    src/runtime.ts: { baseline: 6 }
+    src/smithers-runtime.ts: { baseline: 30 }
+    src/triggers.ts: { baseline: 63 }
+
+mcp-security:
+  loopback-and-timing-safe:
+    "*": { baseline: pass }
+  one-time-sandbox-auth:
+    "*": { baseline: pass }
+  protected-factory-paths:
+    "*": { baseline: pass }
+  untrusted-cache-isolation:
+    "*": { baseline: pass }
+
+testing-and-fuzz:
+  test-to-src-ratio:
+    "*": { target: 55 }
+    dub: { baseline: 63 }
+  fuzz-tests:
+    "*": { target: 5 }
+    tests/fuzz.test.mjs: { baseline: 5 }
+  unit-tests:
+    "*": { target: 25 }
+    "tests/*.test.mjs": { baseline: 37 }
+  browser-acceptance-suites:
+    "*": { target: 5 }
+    tests/browser: { baseline: 6 }
+
+docs-and-footprint:
+  prebuild-size:
+    "*": { target: 160kB }
+    prebuilds/darwin-arm64/dub.node: { baseline: 59.3kB }
+    prebuilds/linux-x64/dub.node: { baseline: 44.4kB }
+  markdown-links:
+    "*": { baseline: pass }
+  factory-knowledge:
+    "*": { baseline: pass }

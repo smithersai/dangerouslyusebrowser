@@ -16,8 +16,19 @@ export { NativeBridge, DubError, defaultSocket } from './native.js';
 export type { NativeStreamMessage, NativeSubscription } from './native.js';
 export { createCommands } from './commands.js';
 export type { Capabilities } from './commands.js';
-export { listen } from './http.js';
-export type { ListenOptions } from './http.js';
+export { listen, isLoopback, UNTRUSTED_FORBIDDEN_TOOLS } from './http.js';
+export type { ListenHandle, ListenOptions } from './http.js';
+export { AuthError, TokenAuthority } from './auth.js';
+export type {
+  AuthAuditEvent,
+  AuthPrincipal,
+  AuthScope,
+  MintOneTimeTokenOptions,
+  MintedOneTimeToken,
+  PrincipalRole,
+  RedeemedSession,
+  TrustLevel,
+} from './auth.js';
 export { launch, attachProfile } from './launch.js';
 export type { LaunchOptions, ProfileAttachResult, Session, SessionHealth, SessionState } from './launch.js';
 export { installBrowser, resolveInstalledBrowser, parseSha256Sums, bundleNameFor, defaultCacheDir } from './download.js';

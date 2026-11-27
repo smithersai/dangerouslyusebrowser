@@ -1,0 +1,29 @@
+# Dub (DangerouslyUseBrowser)
+
+> Real Chromium 157.0.8082.0 fork exposing browser internals directly to agents through native C++20 N-API bindings and an incur MCP server. Built publicly on Smithers Cloud at https://smithers.sh/smithersai/dangerouslyusebrowser.
+
+## Engineering Wiki
+
+- [Start here](https://dangerouslyusebrowser.smithers.sh/docs/start-here.md): Understand Dub's end-to-end architecture from MCP agent call down to forked Chromium 157 C++ seams.
+- [C++20 N-API bridge and IPC protocol](https://dangerouslyusebrowser.smithers.sh/docs/native-bridge.md): Explain Protocol v1 framing, whole-call deadlines, push streams, and C ABI safety.
+- [Chromium 157 fork and overlay seams](https://dangerouslyusebrowser.smithers.sh/docs/chromium-seams.md): Map the pinned Chromium revision, five unified patches, overlay files, and GN build workflow.
+- [NetworkService rewrite and per-tab engine clock](https://dangerouslyusebrowser.smithers.sh/docs/network-and-clock.md): Detail DEMO-01 all-target network interception and DEMO-02 isolated per-tab V8 and Blink clocks.
+- [Persistent profiles, native actor tools, and WebMCP](https://dangerouslyusebrowser.smithers.sh/docs/actor-and-webmcp.md): Document DEMO-03 profile ownership, trusted Chromium actor input, and live page-registered WebMCP tools.
+- [QuickJS code mode, Jev, triggers, and TypeScript plugins](https://dangerouslyusebrowser.smithers.sh/docs/plugins-and-triggers.md): Cover Milestone 4: persistent QuickJS REPL realms, typed Jev evaluators, BYO agent bridge, and hot-reloadable TS plugins.
+- [Cloud MCP server and one-time sandbox auth](https://dangerouslyusebrowser.smithers.sh/docs/cloud-mcp-and-auth.md): Specify loopback defaults, SHA-256 single-use sandbox tokens, replay rejection, untrusted attenuation, and Smithers Cloud MCP.
+- [Smithers Cloud factory, object store, and trust model](https://dangerouslyusebrowser.smithers.sh/docs/factory-and-trust.md): Document incremental smthrs targets, build.smithers.sh cache isolation, Uphill Lighthouse backpressure, and automated releases.
+- [Mythical History](https://dangerouslyusebrowser.smithers.sh/docs/mythical-history.md): Chronological source-grounded history of Dub from verified jj commits and launch evidence.
+
+## Contracts and Specifications
+
+- [Implementation Contract](https://dangerouslyusebrowser.smithers.sh/docs/spec.md): Original Dub architecture contract, demos, and release gates.
+- [Chromium 157 Seam Census](https://dangerouslyusebrowser.smithers.sh/docs/seams.md): Source-backed map of 32 pinned Chromium paths across eight browser seams.
+- [Acceptance Gates](https://dangerouslyusebrowser.smithers.sh/docs/acceptance.md): Exact browser test inventory covering BRIDGE, NET, CLOCK, ACTOR, WEBMCP, PROFILE, and INSTALL.
+- [Contributing and Trust Model](https://dangerouslyusebrowser.smithers.sh/docs/contributing.md): How external contributors work untrusted and how maintainer gates land changes.
+
+## Factory Surfaces
+
+- [Smithers Cloud Coding Factory](https://smithers.sh/smithersai/dangerouslyusebrowser): Public issues, TODO stack, flows, and personalized Maintainer/Contributor/Viewer views
+- [Lighthouse Backpressure Audit Report](https://dangerouslyusebrowser.smithers.sh/audit): Live Uphill audit scores across bridge safety, TypeScript, MCP security, fuzzing, and docs
+- [Project Wiki UI](https://dangerouslyusebrowser.smithers.sh/wiki): Interactive searchable engineering wiki
+- [Mythical History](https://dangerouslyusebrowser.smithers.sh/history): Verified chronological milestone ledger

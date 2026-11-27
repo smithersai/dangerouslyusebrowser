@@ -1,0 +1,19 @@
+---
+description: Mint a short-lived, single-use authentication token for a sandbox or BYO agent with strict trust-tier scope attenuation.
+capabilities:
+  - "fs:read:**"
+  - "proc:spawn:node scripts/mint-sandbox-auth.mjs *"
+model: repository/research
+disable-model-invocation: true
+budget:
+  tokens: 8000
+  milliseconds: 60000
+---
+
+Mint one short-lived, single-use authentication token for a controlled sandbox or BYO agent session using `scripts/mint-sandbox-auth.mjs`.
+
+Rules:
+- Never print long-lived master tokens (`DUB_TOKEN`, `SMITHERS_TOKEN`) or pass secrets on child process argv.
+- Maintainer and controlled sandbox tokens expire within 120 seconds (max 15 minutes) and redeem atomically once at `POST /auth/exchange`.
+- Contributor and viewer tokens are always minted with `trust: "untrusted"` and stripped of `cache:write`, `auth:mint`, `mcp:admin`, `plugin:manage`, and `profile:attach`.
+- Report only the token metadata (`tokenId`, `principal`, `role`, `trust`, `scopes`, `expiresAt`) in durable logs and artifacts.

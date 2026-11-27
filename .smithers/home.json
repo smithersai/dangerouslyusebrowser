@@ -1,0 +1,267 @@
+{
+  "docs": "https://dangerouslyusebrowser.smithers.sh/llms.txt",
+  "contributors": "role",
+  "sections": [
+    {
+      "title": "Today",
+      "audience": "maintainer",
+      "blocks": [
+        {
+          "type": "action",
+          "flow": "branch.new",
+          "title": "New branch",
+          "key": "b"
+        },
+        {
+          "type": "issues",
+          "title": "Triage and TODO queue"
+        },
+        {
+          "type": "stack",
+          "title": "Active stack"
+        },
+        {
+          "type": "runs",
+          "title": "Recent factory runs"
+        },
+        {
+          "type": "flows",
+          "title": "Maintainer controls"
+        },
+        {
+          "type": "links",
+          "title": "Maintainer surfaces",
+          "links": [
+            {
+              "label": "Lighthouse Audit Report",
+              "url": "https://dangerouslyusebrowser.smithers.sh/audit"
+            },
+            {
+              "label": "Engineering Wiki",
+              "url": "https://dangerouslyusebrowser.smithers.sh/wiki"
+            },
+            {
+              "label": "Mythical History",
+              "url": "https://dangerouslyusebrowser.smithers.sh/history"
+            },
+            {
+              "label": "GitHub Mirror",
+              "url": "https://github.com/smithersai/dangerouslyusebrowser"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Contribute",
+      "audience": "contributor",
+      "blocks": [
+        {
+          "type": "code",
+          "title": "Local development and backpressure",
+          "language": "sh",
+          "code": "npm ci\nnpm run build:native\nnpm run typecheck && npm run build && npm test\nnpm run ci\nuphill --compact"
+        },
+        {
+          "type": "cards",
+          "title": "How a change lands",
+          "cards": [
+            {
+              "title": "Run freely, untrusted by default",
+              "text": "Non-maintainers are encouraged to run tests, Uphill audits, and flows. Untrusted runs get read-only cache access and never poison the shared object store."
+            },
+            {
+              "title": "Start with a failing test",
+              "text": "Reproduce bridge, MCP, plugin, or Chromium issues with the smallest failing test before patching."
+            },
+            {
+              "title": "Keep Lighthouse backpressure green",
+              "text": "Every change is scored across bridge safety, TypeScript quality, MCP security, fuzzing, and docs."
+            },
+            {
+              "title": "A human maintainer merges",
+              "text": "Trusted sandbox runs and maintainer review gate protected paths and releases. Agents never approve or merge."
+            }
+          ]
+        },
+        {
+          "type": "links",
+          "title": "Contributor links",
+          "links": [
+            {
+              "label": "Issues and TODOs",
+              "url": "https://smithers.sh/smithersai/dangerouslyusebrowser/issues"
+            },
+            {
+              "label": "Pull requests",
+              "url": "https://smithers.sh/smithersai/dangerouslyusebrowser/pulls"
+            },
+            {
+              "label": "Lighthouse Audit",
+              "url": "https://dangerouslyusebrowser.smithers.sh/audit"
+            },
+            {
+              "label": "Project Wiki",
+              "url": "https://dangerouslyusebrowser.smithers.sh/wiki"
+            },
+            {
+              "label": "Mythical History",
+              "url": "https://dangerouslyusebrowser.smithers.sh/history"
+            },
+            {
+              "label": "Docs Site",
+              "url": "https://dangerouslyusebrowser.smithers.sh"
+            }
+          ]
+        },
+        {
+          "type": "prompt",
+          "title": "Ask about Dub",
+          "placeholder": "Ask about Chromium 157 seams, N-API bridge, MCP auth, or QuickJS plugins..."
+        }
+      ]
+    },
+    {
+      "audience": "everyone",
+      "blocks": [
+        {
+          "type": "hero",
+          "title": "Dub (DangerouslyUseBrowser)",
+          "tagline": "A real Chromium 157 fork exposing browser internals directly to agents through native C++20 N-API bindings and an incur MCP server.",
+          "text": "Rewrite NetworkService traffic across workers and caches, freeze and step per-tab V8 and Blink clocks, act through native Chromium actor tools and WebMCP, and run QuickJS plugins with one-time sandbox auth.",
+          "install": "npm install dangerouslyusebrowser",
+          "actions": [
+            {
+              "label": "Docs and Factory UI",
+              "url": "https://dangerouslyusebrowser.smithers.sh"
+            },
+            {
+              "label": "Lighthouse Audit",
+              "url": "https://dangerouslyusebrowser.smithers.sh/audit"
+            },
+            {
+              "label": "Project Wiki",
+              "url": "https://dangerouslyusebrowser.smithers.sh/wiki"
+            }
+          ],
+          "announcement": {
+            "label": "Built publicly on Smithers Cloud with live Lighthouse backpressure",
+            "url": "https://dangerouslyusebrowser.smithers.sh/audit.html"
+          }
+        },
+        {
+          "type": "code",
+          "title": "Connect an agent with one-time sandbox auth",
+          "file": "quickstart.sh",
+          "language": "sh",
+          "code": "# Download verified Chromium 157 binary and start authenticated MCP server\ndub install\ndub serve --port 7777 --print-one-time-token --sandbox-id demo-1\n\n# Connect via MCP HTTP at http://127.0.0.1:7777/mcp\n# Or connect your agent to Smithers Cloud MCP: https://smithers.sh/api/mcp"
+        },
+        {
+          "type": "stats",
+          "stats": [
+            {
+              "value": "157.0.8082.0",
+              "label": "Pinned Chromium fork"
+            },
+            {
+              "value": "C++20 N-API",
+              "label": "Zero-CDP native bridge"
+            },
+            {
+              "value": "5 Patches",
+              "label": "Network, clock, actor, plugins"
+            },
+            {
+              "value": "MIT",
+              "label": "Open source license"
+            }
+          ]
+        },
+        {
+          "type": "cards",
+          "title": "Core capabilities",
+          "cards": [
+            {
+              "label": "DEMO-01",
+              "title": "Rewrite the network",
+              "text": "Mock, block, redirect, and patch bodies at NetworkService across tabs, workers, CacheStorage, and HTTP cache."
+            },
+            {
+              "label": "DEMO-02",
+              "title": "Control the clock",
+              "text": "Per-tab isolated V8 and Blink engine clock with 31-day jumps, exact frame stepping, and unaffected sibling tabs."
+            },
+            {
+              "label": "DEMO-03",
+              "title": "Act as you",
+              "text": "Persistent profile ownership, native Chromium actor tools dispatching trusted events, and live WebMCP page tools."
+            },
+            {
+              "label": "MILESTONE 4",
+              "title": "QuickJS plugins and triggers",
+              "text": "Hot-reloadable TypeScript plugins, persistent QuickJS REPL realms, Jev typed evaluators, and reactive event streams."
+            },
+            {
+              "label": "CLOUD AUTH",
+              "title": "One-time sandbox tokens",
+              "text": "Single-use SHA-256 bootstrap tokens with timing-safe verification, replay rejection, and untrusted scope attenuation."
+            },
+            {
+              "label": "BACKPRESSURE",
+              "title": "Lighthouse audit report",
+              "text": "Uphill scores bridge safety, TypeScript quality, MCP security, fuzzing, and docs on every change.",
+              "url": "https://dangerouslyusebrowser.smithers.sh/audit"
+            }
+          ]
+        },
+        {
+          "type": "releases",
+          "title": "Milestones and releases",
+          "releases": [
+            {
+              "name": "v0.1.0-alpha.1",
+              "url": "https://github.com/smithersai/dangerouslyusebrowser/tree/main",
+              "date": "2026-11-26",
+              "summary": "Chromium 157 fork, N-API bridge, QuickJS plugins, one-time sandbox auth, and Smithers Cloud factory."
+            }
+          ],
+          "more": {
+            "label": "Read the Mythical History",
+            "url": "https://dangerouslyusebrowser.smithers.sh/history.html"
+          }
+        },
+        {
+          "type": "links",
+          "title": "Explore the project",
+          "links": [
+            {
+              "label": "Project Wiki",
+              "url": "https://dangerouslyusebrowser.smithers.sh/wiki"
+            },
+            {
+              "label": "Mythical History",
+              "url": "https://dangerouslyusebrowser.smithers.sh/history"
+            },
+            {
+              "label": "Lighthouse Audit Report",
+              "url": "https://dangerouslyusebrowser.smithers.sh/audit"
+            },
+            {
+              "label": "llms.txt Index",
+              "url": "https://dangerouslyusebrowser.smithers.sh/llms.txt"
+            },
+            {
+              "label": "GitHub Repository",
+              "url": "https://github.com/smithersai/dangerouslyusebrowser"
+            }
+          ]
+        },
+        {
+          "type": "prompt",
+          "title": "Questions about Dub?",
+          "placeholder": "Ask about this Chromium fork, native seams, or Smithers workflows..."
+        }
+      ]
+    }
+  ]
+}

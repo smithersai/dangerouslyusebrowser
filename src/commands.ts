@@ -22,19 +22,15 @@ function parseJsonObject(value: string, label = '--input'): Record<string, unkno
 
 export type Capabilities = { methods?: readonly string[]; tools?: readonly string[] };
 
-export function createCommands(browser: Browser, capabilities?: Capabilities, runtime?: DubRuntime) {
-  const rt = runtime ?? new DubRuntime(browser);
-  const allowed = capabilities?.methods ? new Set(capabilities.methods) : undefined;
-  const has = (method: string) => !allowed || allowed.has(method);
-  const wrap = <T>(name: string, input: Record<string, unknown>, fn: () => Promise<T>) =>
-    rt.plugins.runWithMiddleware(name, input, fn);
+type CommandContext = {
+  cli: ReturnType<typeof Cli.create>;
+  browser: Browser;
+  rt: DubRuntime;
+  has: (method: string) => boolean;
+  wrap: <T>(name: string, input: Record<string, unknown>, fn: () => Promise<T>) => Promise<T>;
+};
 
-  const cli = Cli.create('dub', {
-    description: 'DangerouslyUseBrowser — direct control of a forked Chromium with Smithers code mode, Jev, BYO agent triggers, and TS plugins',
-    version: '0.1.0-alpha.1',
-    mcp: { tools: { discovery: 'direct' } },
-  });
-
+function registerTabsAndFrames({ cli, browser, has, wrap }: CommandContext): void {
   if (has('browser.info')) {
     cli.command('status', {
       description: 'Identify the running Dub fork and its native capabilities',
@@ -42,7 +38,6 @@ export function createCommands(browser: Browser, capabilities?: Capabilities, ru
     });
   }
 
-  // --- Tabs & Navigation ---
   const tabMethods = ['tabs.list', 'tabs.open', 'tabs.close', 'tabs.activate', 'tabs.navigate', 'tabs.back', 'tabs.forward', 'tabs.reload'];
   if (tabMethods.some(has)) {
     const tabs = Cli.create('tabs', { description: 'Persistent and ephemeral browser tabs' });
@@ -79,13 +74,14 @@ export function createCommands(browser: Browser, capabilities?: Capabilities, ru
     cli.command(tabs);
   }
 
-  // --- Frames & Observation ---
   if (has('frames.list')) {
     const frames = Cli.create('frames', { description: 'Inspect frames and iframes in a tab' });
     frames.command('list', { description: 'List live frames in a tab', options: z.object({ tab }), run: c => browser.frames(c.options.tab) });
     cli.command(frames);
   }
+}
 
+function registerPageCommands({ cli, browser, has, wrap }: CommandContext): void {
   if (['page.snapshot', 'page.console', 'page.wait', 'page.viewport', 'page.emulate'].some(has)) {
     const page = Cli.create('page', { description: 'Page observation, waiting, viewport, and emulation' });
     if (has('page.snapshot')) {
@@ -166,7 +162,9 @@ export function createCommands(browser: Browser, capabilities?: Capabilities, ru
     }
     cli.command(page);
   }
+}
 
+function registerEvalAndScreenshotCommands({ cli, browser, has, wrap }: CommandContext): void {
   if (has('page.evaluate')) {
     cli.command('evaluate', {
       description: 'Evaluate JavaScript in a tab frame (main or isolated world)',
@@ -184,7 +182,7 @@ export function createCommands(browser: Browser, capabilities?: Capabilities, ru
 
   if (has('page.screenshot')) {
     cli.command('screenshot', {
-      description: 'Capture a tab as PNG or JPEG (optional clip region); optionally write it on the server',
+      description: 'Capture a tab as PNG or JPEG (optional clip region) and optionally write it on the server',
       options: z.object({
         tab,
         out: z.string().optional(),
@@ -207,158 +205,165 @@ export function createCommands(browser: Browser, capabilities?: Capabilities, ru
       },
     });
   }
+}
 
-  // --- Tools (Native Actor + WebMCP + Plugin Synthetic WebMCP + Plugin Tools) ---
-  if (has('tools.list') || has('tools.call')) {
-    const tools = Cli.create('tools', { description: 'Chromium actor, WebMCP page tools, and plugin-registered tools' });
-    if (has('tools.list')) {
-      tools.command('list', {
-        description: 'Discover native actor, WebMCP, and plugin-registered tools',
-        options: z.object({ tab }),
-        async run(c) {
-          const nativeRes = await browser.tools(c.options.tab);
+function registerToolsCommands({ cli, browser, rt, has, wrap }: CommandContext): void {
+  if (!has('tools.list') && !has('tools.call')) return;
+  const tools = Cli.create('tools', { description: 'Chromium actor, WebMCP page tools, and plugin-registered tools' });
+  if (has('tools.list')) {
+    tools.command('list', {
+      description: 'Discover native actor, WebMCP, and plugin-registered tools',
+      options: z.object({ tab }),
+      async run(c) {
+        const nativeRes = await browser.tools(c.options.tab);
+        const { tabs } = await browser.tabs().catch(() => ({ tabs: [] }));
+        const tabInfo = tabs.find(t => t.id === c.options.tab);
+        const synthetic = tabInfo ? rt.plugins.listSyntheticPageToolsForUrl(tabInfo.url) : [];
+        const custom = rt.plugins.listCustomTools();
+        return { tools: [...(nativeRes.tools ?? []), ...synthetic, ...custom] };
+      },
+    });
+  }
+  if (has('tools.call')) {
+    tools.command('call', {
+      description: 'Invoke a native actor, WebMCP, or plugin tool',
+      args: z.object({ name: z.string().min(1) }),
+      options: z.object({ tab, input: jsonObject }),
+      async run(c) {
+        const parsedInput = parseJsonObject(c.options.input);
+        return wrap(`tools.call:${c.args.name}`, { tab: c.options.tab, ...parsedInput }, async () => {
           const { tabs } = await browser.tabs().catch(() => ({ tabs: [] }));
-          const tabInfo = tabs.find(t => t.id === c.options.tab);
-          const synthetic = tabInfo ? rt.plugins.listSyntheticPageToolsForUrl(tabInfo.url) : [];
-          const custom = rt.plugins.listCustomTools();
-          return { tools: [...(nativeRes.tools ?? []), ...synthetic, ...custom] };
-        },
-      });
-    }
-    if (has('tools.call')) {
-      tools.command('call', {
-        description: 'Invoke a native actor, WebMCP, or plugin tool',
-        args: z.object({ name: z.string().min(1) }),
-        options: z.object({ tab, input: jsonObject }),
-        async run(c) {
-          const parsedInput = parseJsonObject(c.options.input);
-          return wrap(`tools.call:${c.args.name}`, { tab: c.options.tab, ...parsedInput }, async () => {
-            const { tabs } = await browser.tabs().catch(() => ({ tabs: [] }));
-            const tabUrl = tabs.find(t => t.id === c.options.tab)?.url ?? '';
-            const pluginHit = await rt.plugins.invokeCustomOrSyntheticTool(c.options.tab, tabUrl, c.args.name, parsedInput);
-            if (pluginHit.handled) return pluginHit.result;
-            return browser.tool(c.options.tab, c.args.name, parsedInput);
-          });
-        },
-      });
-    }
-    cli.command(tools);
+          const tabUrl = tabs.find(t => t.id === c.options.tab)?.url ?? '';
+          const pluginHit = await rt.plugins.invokeCustomOrSyntheticTool(c.options.tab, tabUrl, c.args.name, parsedInput);
+          if (pluginHit.handled) return pluginHit.result;
+          return browser.tool(c.options.tab, c.args.name, parsedInput);
+        });
+      },
+    });
   }
+  cli.command(tools);
+}
 
-  // --- Network ---
-  if (['net.set', 'net.list', 'net.remove', 'net.log'].some(has)) {
-    const net = Cli.create('net', { description: 'Live browser-wide network rules, mutations, fault injection, and inspection' });
-    if (has('net.set')) {
-      net.command('rewrite', {
-        description: 'Return a mock response; body is a file on the server',
-        options: z.object({ match: z.string().min(1), status: z.number().int().min(200).max(599).default(200), body: z.string(), contentType: z.string().default('application/json'), regex: z.boolean().default(false) }),
-        async run(c) {
-          return browser.setRule({ match: c.options.match, action: 'mock', status: c.options.status, body: await readFile(c.options.body, 'utf8'), headers: { 'content-type': c.options.contentType }, regex: c.options.regex });
-        },
-      });
-      net.command('mock', {
-        description: 'Return a mock response from inline content',
-        options: z.object({ match: z.string().min(1), body: z.string(), status: z.number().int().min(200).max(599).default(200), contentType: z.string().default('application/json'), regex: z.boolean().default(false) }),
-        run: c => browser.setRule({ match: c.options.match, body: c.options.body, status: c.options.status, headers: { 'content-type': c.options.contentType }, action: 'mock', regex: c.options.regex }),
-      });
-      net.command('block', {
-        description: 'Block matching requests (optionally with a specific net error)',
-        options: z.object({ match: z.string().min(1), failError: z.string().optional(), regex: z.boolean().default(false) }),
-        run: c => browser.setRule({ ...c.options, action: 'block' }),
-      });
-      net.command('redirect', {
-        description: 'Rewrite matching outgoing URLs',
-        options: z.object({ match: z.string().min(1), url: z.string().url(), regex: z.boolean().default(false) }),
-        run: c => browser.setRule({ ...c.options, action: 'redirect' }),
-      });
-      net.command('patch', {
-        description: 'Replace text (literal or regex) in matching response bodies',
-        options: z.object({ match: z.string().min(1), replace: z.string().min(1), with: z.string(), patchRegex: z.boolean().default(false), regex: z.boolean().default(false) }),
-        run: c => browser.setRule({ ...c.options, action: 'patch' }),
-      });
-      net.command('modify', {
-        description: 'Mutate request/response headers, status, or inject latency/faults',
-        options: z.object({
-          match: z.string().min(1),
-          regex: z.boolean().default(false),
-          status: z.number().int().min(100).max(599).optional(),
-          delayMs: z.number().int().min(0).max(60000).optional(),
-          jitterMs: z.number().int().min(0).max(30000).optional(),
-          failError: z.string().optional(),
-          setRequestHeaders: z.string().optional().describe('JSON object of request headers to set'),
-          setResponseHeaders: z.string().optional().describe('JSON object of response headers to set'),
-        }),
-        run: c => browser.setRule({
-          match: c.options.match,
-          action: 'modify',
-          regex: c.options.regex,
-          status: c.options.status,
-          delayMs: c.options.delayMs,
-          jitterMs: c.options.jitterMs,
-          failError: c.options.failError,
-          ...(c.options.setRequestHeaders ? { setRequestHeaders: parseJsonObject(c.options.setRequestHeaders, '--set-request-headers') as Record<string, string> } : {}),
-          ...(c.options.setResponseHeaders ? { setResponseHeaders: parseJsonObject(c.options.setResponseHeaders, '--set-response-headers') as Record<string, string> } : {}),
-        }),
-      });
+async function followNetworkLog(
+  browser: Browser,
+  options: { match: string; since: number; limit: number; timeoutMs: number }
+) {
+  let cursor = options.since;
+  let gap = false;
+  let droppedCount = 0;
+  let oldestSeq = 0;
+  let version = 0;
+  const entries: Array<Record<string, unknown>> = [];
+  const deadline = Date.now() + options.timeoutMs;
+  while (Date.now() < deadline && entries.length < options.limit) {
+    const page = (await browser.networkLog(options.match, cursor)) as {
+      entries: Array<Record<string, unknown>>;
+      nextSeq: number; oldestSeq: number; droppedCount: number; gap: boolean; version: number;
+    };
+    version = page.version;
+    oldestSeq = page.oldestSeq;
+    droppedCount = page.droppedCount;
+    if (page.gap) gap = true;
+    for (const entry of page.entries) {
+      entries.push(entry);
+      if (entries.length >= options.limit) break;
     }
-    if (has('net.list')) net.command('list', { description: 'List live rules', run: () => browser.rules() });
-    if (has('net.remove')) net.command('remove', { description: 'Remove a rule', options: z.object({ id: z.string().min(1) }), run: c => browser.removeRule(c.options.id) });
-    if (has('net.config')) {
-      net.command('config', {
-        description: 'Configure request/response body capture for network inspection',
-        options: z.object({ captureBodies: z.boolean().optional(), maxBodyBytes: z.number().int().min(1024).max(4194304).optional() }),
-        run: c => browser.networkConfig(c.options),
-      });
-    }
-    if (has('net.inspect')) {
-      net.command('inspect', {
-        description: 'Inspect full captured headers and bodies for a network log sequence number',
-        options: z.object({ seq: z.number().int().positive() }),
-        run: c => browser.inspectNetwork(c.options.seq),
-      });
-    }
-    if (has('net.log')) {
-      net.command('log', {
-        description: 'Read or follow the bounded network log after a sequence number',
-        options: z.object({
-          match: z.string().default(''),
-          since: z.number().int().min(0).default(0),
-          follow: z.boolean().default(false).describe('Poll for new entries until limit or timeoutMs'),
-          limit: z.number().int().min(1).max(2000).default(100),
-          timeoutMs: z.number().int().min(100).max(60000).default(3000),
-        }),
-        async run(c) {
-          if (!c.options.follow) return browser.networkLog(c.options.match, c.options.since);
-          let cursor = c.options.since;
-          let gap = false;
-          let droppedCount = 0;
-          let oldestSeq = 0;
-          let version = 0;
-          const entries: Array<Record<string, unknown>> = [];
-          const deadline = Date.now() + c.options.timeoutMs;
-          while (Date.now() < deadline && entries.length < c.options.limit) {
-            const page = (await browser.networkLog(c.options.match, cursor)) as {
-              entries: Array<Record<string, unknown>>;
-              nextSeq: number; oldestSeq: number; droppedCount: number; gap: boolean; version: number;
-            };
-            version = page.version; oldestSeq = page.oldestSeq; droppedCount = page.droppedCount;
-            if (page.gap) gap = true;
-            for (const entry of page.entries) {
-              entries.push(entry);
-              if (entries.length >= c.options.limit) break;
-            }
-            if (page.nextSeq > cursor) cursor = page.nextSeq;
-            if (entries.length >= c.options.limit) break;
-            await delay(Math.min(100, Math.max(0, deadline - Date.now())));
-          }
-          return { followed: true, version, nextSeq: cursor, oldestSeq, droppedCount, gap, entries };
-        },
-      });
-    }
-    cli.command(net);
+    if (page.nextSeq > cursor) cursor = page.nextSeq;
+    if (entries.length >= options.limit) break;
+    await delay(Math.min(100, Math.max(0, deadline - Date.now())));
   }
+  return { followed: true, version, nextSeq: cursor, oldestSeq, droppedCount, gap, entries };
+}
 
-  // --- Clock ---
+function registerNetworkCommands({ cli, browser, has }: CommandContext): void {
+  if (!['net.set', 'net.list', 'net.remove', 'net.log'].some(has)) return;
+  const net = Cli.create('net', { description: 'Live browser-wide network rules, mutations, fault injection, and inspection' });
+  if (has('net.set')) {
+    net.command('rewrite', {
+      description: 'Return a mock response from a file on the server',
+      options: z.object({ match: z.string().min(1), status: z.number().int().min(200).max(599).default(200), body: z.string(), contentType: z.string().default('application/json'), regex: z.boolean().default(false) }),
+      async run(c) {
+        return browser.setRule({ match: c.options.match, action: 'mock', status: c.options.status, body: await readFile(c.options.body, 'utf8'), headers: { 'content-type': c.options.contentType }, regex: c.options.regex });
+      },
+    });
+    net.command('mock', {
+      description: 'Return a mock response from inline content',
+      options: z.object({ match: z.string().min(1), body: z.string(), status: z.number().int().min(200).max(599).default(200), contentType: z.string().default('application/json'), regex: z.boolean().default(false) }),
+      run: c => browser.setRule({ match: c.options.match, body: c.options.body, status: c.options.status, headers: { 'content-type': c.options.contentType }, action: 'mock', regex: c.options.regex }),
+    });
+    net.command('block', {
+      description: 'Block matching requests (optionally with a specific net error)',
+      options: z.object({ match: z.string().min(1), failError: z.string().optional(), regex: z.boolean().default(false) }),
+      run: c => browser.setRule({ ...c.options, action: 'block' }),
+    });
+    net.command('redirect', {
+      description: 'Rewrite matching outgoing URLs',
+      options: z.object({ match: z.string().min(1), url: z.string().url(), regex: z.boolean().default(false) }),
+      run: c => browser.setRule({ ...c.options, action: 'redirect' }),
+    });
+    net.command('patch', {
+      description: 'Replace text (literal or regex) in matching response bodies',
+      options: z.object({ match: z.string().min(1), replace: z.string().min(1), with: z.string(), patchRegex: z.boolean().default(false), regex: z.boolean().default(false) }),
+      run: c => browser.setRule({ ...c.options, action: 'patch' }),
+    });
+    net.command('modify', {
+      description: 'Mutate request/response headers, status, or inject latency/faults',
+      options: z.object({
+        match: z.string().min(1),
+        regex: z.boolean().default(false),
+        status: z.number().int().min(100).max(599).optional(),
+        delayMs: z.number().int().min(0).max(60000).optional(),
+        jitterMs: z.number().int().min(0).max(30000).optional(),
+        failError: z.string().optional(),
+        setRequestHeaders: z.string().optional().describe('JSON object of request headers to set'),
+        setResponseHeaders: z.string().optional().describe('JSON object of response headers to set'),
+      }),
+      run: c => browser.setRule({
+        match: c.options.match,
+        action: 'modify',
+        regex: c.options.regex,
+        status: c.options.status,
+        delayMs: c.options.delayMs,
+        jitterMs: c.options.jitterMs,
+        failError: c.options.failError,
+        ...(c.options.setRequestHeaders ? { setRequestHeaders: parseJsonObject(c.options.setRequestHeaders, '--set-request-headers') as Record<string, string> } : {}),
+        ...(c.options.setResponseHeaders ? { setResponseHeaders: parseJsonObject(c.options.setResponseHeaders, '--set-response-headers') as Record<string, string> } : {}),
+      }),
+    });
+  }
+  if (has('net.list')) net.command('list', { description: 'List live rules', run: () => browser.rules() });
+  if (has('net.remove')) net.command('remove', { description: 'Remove a rule', options: z.object({ id: z.string().min(1) }), run: c => browser.removeRule(c.options.id) });
+  if (has('net.config')) {
+    net.command('config', {
+      description: 'Configure request/response body capture for network inspection',
+      options: z.object({ captureBodies: z.boolean().optional(), maxBodyBytes: z.number().int().min(1024).max(4194304).optional() }),
+      run: c => browser.networkConfig(c.options),
+    });
+  }
+  if (has('net.inspect')) {
+    net.command('inspect', {
+      description: 'Inspect full captured headers and bodies for a network log sequence number',
+      options: z.object({ seq: z.number().int().positive() }),
+      run: c => browser.inspectNetwork(c.options.seq),
+    });
+  }
+  if (has('net.log')) {
+    net.command('log', {
+      description: 'Read or follow the bounded network log after a sequence number',
+      options: z.object({
+        match: z.string().default(''),
+        since: z.number().int().min(0).default(0),
+        follow: z.boolean().default(false).describe('Poll for new entries until limit or timeoutMs'),
+        limit: z.number().int().min(1).max(2000).default(100),
+        timeoutMs: z.number().int().min(100).max(60000).default(3000),
+      }),
+      run: c => (c.options.follow ? followNetworkLog(browser, c.options) : browser.networkLog(c.options.match, c.options.since)),
+    });
+  }
+  cli.command(net);
+}
+
+function registerClockAndStateCommands({ cli, browser, has }: CommandContext): void {
   if (['clock.freeze', 'clock.advance', 'clock.step', 'clock.resume'].some(has)) {
     const clock = Cli.create('clock', { description: 'Engine-level virtual time' });
     if (has('clock.freeze')) clock.command('freeze', { description: 'Freeze the selected tab at an ISO date', options: z.object({ tab, at: z.iso.datetime({ offset: true }) }), run: c => browser.freeze(c.options.tab, c.options.at) });
@@ -368,7 +373,6 @@ export function createCommands(browser: Browser, capabilities?: Capabilities, ru
     cli.command(clock);
   }
 
-  // --- Profile, Cookies & Storage ---
   if (has('profile.info') || has('profile.clear')) {
     const profile = Cli.create('profile', { description: 'Selected browser profile and storage' });
     if (has('profile.info')) profile.command('info', { description: 'Inspect the selected profile', run: () => browser.profileInfo() });
@@ -422,8 +426,9 @@ export function createCommands(browser: Browser, capabilities?: Capabilities, ru
     if (has('storage.import')) storage.command('import', { description: 'Import storage state JSON into a tab', options: z.object({ tab, state: jsonObject }), run: c => browser.importStorage(c.options.tab, parseJsonObject(c.options.state, '--state')) });
     cli.command(storage);
   }
+}
 
-  // --- Dialogs, Downloads, Clipboard, Scripts, Trace ---
+function registerBrowserControlCommands({ cli, browser, has }: CommandContext): void {
   if (['dialog.policy', 'dialog.list', 'dialog.respond'].some(has)) {
     const dialog = Cli.create('dialog', { description: 'Control JavaScript alert/confirm/prompt/beforeunload dialogs' });
     if (has('dialog.policy')) {
@@ -501,11 +506,12 @@ export function createCommands(browser: Browser, capabilities?: Capabilities, ru
     });
     cli.command(trace);
   }
+}
 
-  // --- Smithers Code Mode (QuickJS Persistent REPL Realm) ---
+function registerCodeJevAgentCommands({ cli, rt }: CommandContext): void {
   const code = Cli.create('code', { description: 'Smithers QuickJS code-mode sandbox (persistent TypeScript REPL with ctx.call to Dub, Jev, and BYO agent)' });
   code.command('eval', {
-    description: 'Run TypeScript/JS in a Smithers QuickJS code-mode realm (use ctx.call("dub.*", ...), ctx.call("jev", ...), ctx.call("agent.turn", ...), and ctx.done(result))',
+    description: 'Run TypeScript/JS in a Smithers QuickJS code-mode realm',
     options: z.object({
       code: z.string().optional(),
       file: z.string().optional(),
@@ -524,7 +530,6 @@ export function createCommands(browser: Browser, capabilities?: Capabilities, ru
   code.command('reset', { description: 'Reset and dispose a persistent realm', options: z.object({ realm: z.string().default('default') }), run: async c => ({ reset: await rt.code.resetRealm(c.options.realm) }) });
   cli.command(code);
 
-  // Shorthand `dub exec` alias for Smithers code mode
   cli.command('exec', {
     description: 'Execute TypeScript in Smithers QuickJS code mode (shorthand for code eval)',
     options: z.object({
@@ -540,7 +545,6 @@ export function createCommands(browser: Browser, capabilities?: Capabilities, ru
     },
   });
 
-  // --- Smithers Jev Decision Model ---
   const jev = Cli.create('jev', { description: 'Fast typed decision model (typesafe-ai/jev via @smthrs/model/Evaluator)' });
   jev.command('status', { description: 'Check whether Jev evaluator is configured', run: () => ({ configured: rt.jev.isConfigured, model: rt.jev.modelId }) });
   jev.command('ask', {
@@ -553,7 +557,6 @@ export function createCommands(browser: Browser, capabilities?: Capabilities, ru
   });
   cli.command(jev);
 
-  // --- BYO Agent Bridge ---
   const agent = Cli.create('agent', { description: 'Configure or invoke the user BYO agent (CLI, HTTP model/webhook, or MCP turn handoff)' });
   agent.command('status', { description: 'Show active BYO agent adapter configuration', run: () => rt.agent.describe() });
   agent.command('configure', {
@@ -586,9 +589,10 @@ export function createCommands(browser: Browser, capabilities?: Capabilities, ru
     run: c => rt.agent.runTurn({ event: c.options.event, prompt: c.options.prompt, payload: parseJsonObject(c.options.payload, '--payload'), timeoutMs: c.options.timeoutMs }),
   });
   cli.command(agent);
+}
 
-  // --- Reactive Triggers (LLM registers hooks that pause Chromium and trigger a new turn / code cell / Jev decision) ---
-  const triggers = Cli.create('triggers', { description: 'Register reactive browser hooks that trigger a new LLM turn, Smithers code cell, or Jev decision to rewrite behavior' });
+function registerTriggersAndPluginsCommands({ cli, rt }: CommandContext): void {
+  const triggers = Cli.create('triggers', { description: 'Register reactive browser hooks that trigger a new LLM turn, Smithers code cell, or Jev decision' });
   triggers.command('register', {
     description: 'Register a reactive trigger on network, dialog, navigation, console, error, download, or WebSocket events',
     options: z.object({
@@ -596,10 +600,10 @@ export function createCommands(browser: Browser, capabilities?: Capabilities, ru
       match: z.string().default('*'),
       regex: z.boolean().default(false),
       mode: z.enum(['code', 'agent', 'jev']).default('agent'),
-      code: z.string().optional().describe('TypeScript cell for mode=code (receives `event`, calls `ctx.call`, returns via `ctx.done(decision)`)'),
-      prompt: z.string().optional().describe('Instructions for the LLM turn when mode=agent or Jev escalates'),
-      questions: z.string().optional().describe('JSON map of Jev questions for mode=jev'),
-      jevRoutes: z.string().optional().describe('JSON map of Jev answer -> decision object | "agent" | "code"'),
+      code: z.string().optional(),
+      prompt: z.string().optional(),
+      questions: z.string().optional(),
+      jevRoutes: z.string().optional(),
       jevRouteQuestion: z.string().optional(),
       realm: z.string().optional(),
       timeoutMs: z.number().int().min(200).max(120000).optional(),
@@ -637,8 +641,8 @@ export function createCommands(browser: Browser, capabilities?: Capabilities, ru
     description: 'Resolve a paused LLM trigger turn with a rewrite decision JSON or Smithers code-mode TypeScript snippet',
     options: z.object({
       turnId: z.string().min(1),
-      decision: z.string().optional().describe('JSON decision object (e.g. {"action":"mock","status":200,"body":"..."})'),
-      code: z.string().optional().describe('TypeScript cell to execute in Smithers QuickJS to produce the decision'),
+      decision: z.string().optional(),
+      code: z.string().optional(),
     }),
     run(c) {
       const ok = rt.agent.resolveTurn(c.options.turnId, {
@@ -652,7 +656,6 @@ export function createCommands(browser: Browser, capabilities?: Capabilities, ru
   triggers.command('history', { description: 'Inspect recent trigger executions', options: z.object({ limit: z.number().int().min(1).max(500).default(50) }), run: c => ({ history: rt.triggers.getHistory(c.options.limit) }) });
   cli.command(triggers);
 
-  // --- TypeScript Code Plugins ---
   const plugin = Cli.create('plugin', { description: 'Hot-loadable TypeScript code plugins that extend and modify browser behavior' });
   plugin.command('load', {
     description: 'Load a TypeScript or JavaScript Dub plugin file',
@@ -664,6 +667,30 @@ export function createCommands(browser: Browser, capabilities?: Capabilities, ru
   plugin.command('list', { description: 'List loaded TypeScript plugins', run: () => ({ plugins: rt.plugins.list() }) });
   plugin.command('logs', { description: 'Read logs/errors from loaded plugins', options: z.object({ name: z.string().optional() }), run: c => ({ logs: rt.plugins.logs(c.options.name) }) });
   cli.command(plugin);
+}
 
+export function createCommands(browser: Browser, capabilities?: Capabilities, runtime?: DubRuntime) {
+  const rt = runtime ?? new DubRuntime(browser);
+  const allowed = capabilities?.methods ? new Set(capabilities.methods) : undefined;
+  const has = (method: string) => !allowed || allowed.has(method);
+  const wrap = <T>(name: string, input: Record<string, unknown>, fn: () => Promise<T>) =>
+    rt.plugins.runWithMiddleware(name, input, fn);
+
+  const cli = Cli.create('dub', {
+    description: 'DangerouslyUseBrowser: direct control of a forked Chromium with Smithers code mode, Jev, BYO agent triggers, and TS plugins',
+    version: '0.1.0-alpha.1',
+    mcp: { tools: { discovery: 'direct' } },
+  });
+
+  const ctx: CommandContext = { cli, browser, rt, has, wrap };
+  registerTabsAndFrames(ctx);
+  registerPageCommands(ctx);
+  registerEvalAndScreenshotCommands(ctx);
+  registerToolsCommands(ctx);
+  registerNetworkCommands(ctx);
+  registerClockAndStateCommands(ctx);
+  registerBrowserControlCommands(ctx);
+  registerCodeJevAgentCommands(ctx);
+  registerTriggersAndPluginsCommands(ctx);
   return cli;
 }

@@ -1,0 +1,18 @@
+---
+description: Check, build, rehearse, gate on Lighthouse backpressure, and publish a Dub release to npm and GitHub after maintainer approval.
+capabilities:
+  - "fs:read:**"
+  - "proc:spawn:npm *"
+  - "proc:spawn:node scripts/*"
+model: repository/author
+disable-model-invocation: true
+budget:
+  tokens: 32000
+  milliseconds: 600000
+---
+
+Execute Dub's guarded release pipeline (only in trusted maintainer or main-branch environments):
+1. Verify clean `jj` checkout, `npm run build:native`, `npm run typecheck`, `npm run build`, `npm test`, and `smthrs ci //...`.
+2. Run `uphill --compact` and `node scripts/build-audit-report.mjs` to confirm Lighthouse backpressure gates pass with no regressions.
+3. Run `npm pack --dry-run` and rehearse a fresh install verifying prebuilds, CLI help, and SHA-256 checksums.
+4. Pause for explicit human maintainer approval before publishing to npm, tagging a GitHub Release, or triggering `docs-publish`.

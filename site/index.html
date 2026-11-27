@@ -3,47 +3,164 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Dub — DangerouslyUseBrowser</title>
-  <meta name="description" content="A real Chromium 157 fork with native N-API bindings and an incur MCP server. NetworkService interception, per-tab isolated engine clock, and native Chromium actor + WebMCP tools.">
+  <title>Dub (DangerouslyUseBrowser) | Smithers Cloud Coding Factory</title>
+  <meta name="description" content="A real Chromium 157 fork with native C++20 N-API bindings, incur MCP server, one-time sandbox auth, and public Smithers Cloud coding factory with Lighthouse backpressure.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div class="wrap">
     <header>
-      <a class="brand" href="#">
+      <a class="brand" href="/">
         <span class="brand-name">Dub</span>
         <span class="brand-pkg">dangerouslyusebrowser</span>
       </a>
       <nav aria-label="Primary">
-        <a href="#why">Why</a>
-        <a href="#quickstart">Quickstart</a>
-        <a href="#examples">Examples</a>
-        <a href="#evidence">Evidence</a>
+        <a href="/" aria-current="page">Home</a>
+        <a href="/audit">Lighthouse Audit</a>
+        <a href="/wiki">Wiki</a>
+        <a href="/history">Mythical History</a>
+        <a href="/llms.txt">llms.txt</a>
+        <a href="https://smithers.sh/smithersai/dangerouslyusebrowser">Smithers Cloud</a>
       </nav>
     </header>
 
     <main>
       <div class="eyebrow">
         <span class="dot" aria-hidden="true"></span>
-        <span>Chromium 157.0.8082.0 fork &middot; Linux x86-64 verified &middot; v0.1.0-alpha.1</span>
+        <span>Chromium 157.0.8082.0 fork &middot; Built publicly on Smithers Cloud &middot; v0.1.0-alpha.1</span>
       </div>
 
       <h1>Chromium internals, exposed directly to agents.</h1>
 
       <p class="lead">
-        <strong>Dub (DangerouslyUseBrowser)</strong> is a real Chromium 157 fork with native N-API bindings and an
-        <a href="https://github.com/wevm/incur">incur</a> MCP server. It is not Playwright, not a stock-CDP wrapper,
-        and not Electron.
+        <strong>Dub (DangerouslyUseBrowser)</strong> is a real Chromium 157 fork with native C++20 N-API bindings, an
+        <a href="https://github.com/wevm/incur">incur</a> MCP server, single-use sandbox authentication, and QuickJS
+        code-mode plugins. It is not Playwright, not a stock-CDP wrapper, and not Electron.
       </p>
 
-      <div class="arch" role="img" aria-label="Architecture: Agent to dub serve MCP to incur to TypeScript to N-API to forked Chromium">
-        Agent <span>&rarr;</span> dub serve /mcp <span>&rarr;</span> incur <span>&rarr;</span> TypeScript <span>&rarr;</span> N-API <span>&rarr;</span> forked Chromium
+      <div class="cta-row">
+        <a class="cta-btn primary" href="https://smithers.sh/smithersai/dangerouslyusebrowser">Open on Smithers Cloud</a>
+        <a class="cta-btn" href="/audit">Inspect Lighthouse Audit</a>
+        <a class="cta-btn" href="/wiki">Read Engineering Wiki</a>
+        <a class="cta-btn" href="/history">Mythical History</a>
+      </div>
+
+      <div class="arch" role="img" aria-label="Architecture: Agent to dub serve MCP with one-time auth to incur to TypeScript to C++20 N-API to forked Chromium 157">
+        Agent <span>&rarr;</span> One-Time Auth <span>&rarr;</span> dub serve /mcp <span>&rarr;</span> QuickJS + incur <span>&rarr;</span> C++20 N-API <span>&rarr;</span> Forked Chromium 157
       </div>
 
       <p class="note">
-        <strong>Why &ldquo;dangerously&rdquo;:</strong> Dub runs without confirmation prompts. It defaults to a separate persistent profile and a loopback listener (<code>127.0.0.1</code>), but can attach to a real signed-in profile and act with that profile&rsquo;s authority.
+        <strong>Why &ldquo;dangerously&rdquo;:</strong> Dub runs without confirmation prompts. It defaults to a separate persistent profile and a loopback listener (<code>127.0.0.1</code>), supports single-use sandbox tokens for cloud agents, and can attach to a real signed-in profile with that profile&rsquo;s authority.
       </p>
+
+      <section id="factory" aria-label="Personalized Smithers Cloud Coding Factory">
+        <h2>Personalized Coding Factory</h2>
+        <p>
+          Dub runs publicly on <a href="https://smithers.sh/smithersai/dangerouslyusebrowser">smithers.sh/smithersai/dangerouslyusebrowser</a> and mirrors automatically to GitHub. Switch personas below to preview the exact audience sections declared in <code>.smithers/home.json</code>.
+        </p>
+
+        <div class="factory-shell">
+          <div class="factory-head">
+            <span class="factory-head-title">
+              <span class="dot" aria-hidden="true"></span>
+              smithers.sh/smithersai/dangerouslyusebrowser
+            </span>
+            <div class="persona-bar" role="tablist" aria-label="View repository as">
+              <button class="persona-btn active" role="tab" aria-selected="true" data-persona="viewer" type="button">Viewer</button>
+              <button class="persona-btn" role="tab" aria-selected="false" data-persona="contributor" type="button">Contributor</button>
+              <button class="persona-btn" role="tab" aria-selected="false" data-persona="maintainer" type="button">Maintainer</button>
+            </div>
+          </div>
+
+          <div class="persona-panel active" data-panel="viewer" role="tabpanel">
+            <div class="persona-banner">
+              <h3>Viewer View (Everyone)</h3>
+              <span class="persona-tag">Public Front Door</span>
+            </div>
+            <p>
+              Clean open-source onboarding: install command, verified Chromium 157 demos, live Lighthouse Audit gauges, Engineering Wiki, Mythical History, and codebase Q&amp;A.
+            </p>
+            <div class="persona-grid">
+              <div class="persona-card">
+                <strong>Zero-friction exploration</strong>
+                <p>Browse verified demos, architecture diagrams, and source-cited wiki pages indexed via <code>llms.txt</code>.</p>
+              </div>
+              <div class="persona-card">
+                <strong>Public backpressure transparency</strong>
+                <p>Every commit publishes live Uphill Lighthouse scores across bridge safety, TypeScript, MCP security, fuzzing, and docs.</p>
+              </div>
+              <div class="persona-card">
+                <strong>Bring Your Own Agent (MCP)</strong>
+                <p>Connect Claude Code, Codex, or Antigravity to <code>https://smithers.sh/api/mcp</code> to inspect issues, flows, and artifacts.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="persona-panel" data-panel="contributor" role="tabpanel">
+            <div class="persona-banner">
+              <h3>Contributor View (1+ Contributions)</h3>
+              <span class="persona-tag">Untrusted Execution Encouraged &middot; Read-Only Cache</span>
+            </div>
+            <p>
+              Contributors get local setup commands, active issue and PR queues, and direct access to run tests, Uphill backpressure, and flows freely in untrusted mode.
+            </p>
+            <div class="persona-grid">
+              <div class="persona-card">
+                <strong>Run freely without poisoning cache</strong>
+                <p>Fork and contributor runs read from <code>build.smithers.sh</code> but never carry write tokens, so untrusted output can never poison the shared object store.</p>
+              </div>
+              <div class="persona-card">
+                <strong>Protected trust roots</strong>
+                <p>Changes to <code>.github</code>, <code>.smithers</code>, <code>chromium/patches</code>, and <code>native</code> always route through maintainer review before landing.</p>
+              </div>
+              <div class="persona-card">
+                <strong>Full contributor credit</strong>
+                <p>Accepted PRs merge as the contributor&rsquo;s own work after trusted verification and human maintainer approval.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="persona-panel" data-panel="maintainer" role="tabpanel">
+            <div class="persona-banner">
+              <h3>Maintainer Cockpit (roninjin10)</h3>
+              <span class="persona-tag trusted">Trusted Sandbox &middot; Read + Write Object Store</span>
+            </div>
+            <p>
+              Opens directly on Today: press <code>b</code> for a new branch, manage TODO stacks, inspect failing runs first, mint one-time sandbox tokens, and approve releases.
+            </p>
+            <div class="persona-grid">
+              <div class="persona-card">
+                <strong>Shared object store writes</strong>
+                <p>Controlled sandboxes and <code>main</code> runs publish incremental <code>smthrs</code> artifacts to <code>https://build.smithers.sh</code>.</p>
+              </div>
+              <div class="persona-card">
+                <strong>One-time sandbox auth</strong>
+                <p>Mint single-use SHA-256 bootstrap tokens via <code>dub serve --print-one-time-token</code> or <code>scripts/mint-sandbox-auth.mjs</code>.</p>
+              </div>
+              <div class="persona-card">
+                <strong>Auto-release on merge</strong>
+                <p>Merging from Smithers Cloud to GitHub <code>main</code> triggers trusted CI, npm + GitHub Releases, and instant docs + audit publishing.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="backpressure">
+        <h2>Lighthouse Backpressure</h2>
+        <p>
+          Every change runs Uphill across five scored categories and publishes an interactive Google Lighthouse-style audit report backed by real machine receipts.
+        </p>
+        <div class="audit-strip" id="audit-strip">
+          <a class="audit-mini" data-cat="bridge-safety" href="/audit#cat-bridge-safety"><strong>100</strong><span>Bridge Safety</span></a>
+          <a class="audit-mini" data-cat="typescript-quality" href="/audit#cat-typescript-quality"><strong>99</strong><span>TypeScript Quality</span></a>
+          <a class="audit-mini" data-cat="mcp-security" href="/audit#cat-mcp-security"><strong>100</strong><span>MCP Security</span></a>
+          <a class="audit-mini" data-cat="testing-and-fuzz" href="/audit#cat-testing-and-fuzz"><strong>93</strong><span>Testing &amp; Fuzzing</span></a>
+          <a class="audit-mini" data-cat="docs-and-footprint" href="/audit#cat-docs-and-footprint"><strong>100</strong><span>Docs &amp; Footprint</span></a>
+        </div>
+        <p><a href="/audit">Open the full interactive Lighthouse Audit Report &rarr;</a></p>
+      </section>
 
       <section id="demo-video" class="video-section" hidden>
         <h2>Demo</h2>
@@ -73,17 +190,27 @@
               <tr>
                 <td>NetworkService interception</td>
                 <td>Mock, block, redirect, and patch decoded response bodies across tabs, dedicated/shared/service workers, <code>CacheStorage</code>, and HTTP disk cache, plus bounded <code>net log --follow</code>.</td>
-                <td><code>url_loader_request_interceptor.h</code> (browser process)</td>
+                <td><code>services/network/dub</code> + Mojo policy</td>
               </tr>
               <tr>
                 <td>Per-tab isolated engine clock</td>
-                <td>Freeze, jump (including 31-day advances with bounded interval fire caps), step exact animation frames, and monotonically resume <code>Date</code>, <code>performance.now()</code>, timers, <code>rAF</code>, and CSS animations &mdash; without disturbing other tabs sharing the same renderer.</td>
+                <td>Freeze, jump 31 days with bounded interval fire caps, step exact animation frames, and monotonically resume <code>Date</code>, <code>performance.now()</code>, timers, <code>rAF</code>, and CSS animations without disturbing sibling tabs in the same renderer.</td>
                 <td>Per-tab V8 + Blink clock override</td>
               </tr>
               <tr>
                 <td>Native actor + WebMCP</td>
-                <td>Own a persistent profile (<code>profile attach</code>), invoke Chromium&rsquo;s native actor tools (<code>actor.click</code>, <code>actor.type</code>, <code>actor.select</code>, <code>actor.scroll</code>, <code>actor.upload_file</code>) dispatching real <code>isTrusted: true</code> events, and discover/call site-registered WebMCP tools.</td>
+                <td>Own a persistent profile (<code>profile attach</code>), invoke Chromium&rsquo;s native actor tools dispatching real <code>isTrusted: true</code> events, and discover or call live site-registered WebMCP tools.</td>
                 <td><code>chrome/browser/actor/tools</code> + WebMCP</td>
+              </tr>
+              <tr>
+                <td>QuickJS plugins &amp; triggers</td>
+                <td>Subscribe to live Chromium push events over AF_UNIX, run persistent QuickJS TypeScript cells, route decisions through typed Jev evaluators, and hot-reload TypeScript plugins.</td>
+                <td><code>dub_events</code> + <code>@smthrs/harness</code></td>
+              </tr>
+              <tr>
+                <td>Cloud MCP one-time auth</td>
+                <td>Print single-use SHA-256 bootstrap tokens for sandboxes and BYO agents, exchange atomically once at <code>/auth/exchange</code>, reject replays, and attenuate untrusted scopes.</td>
+                <td><code>src/auth.ts</code> + <code>src/http.ts</code></td>
               </tr>
             </tbody>
           </table>
@@ -93,12 +220,12 @@
       <section id="quickstart">
         <h2>Quickstart</h2>
         <p>
-          Requires Node 22+ and a C++ toolchain for the native N-API bridge. Every <code>dub</code> subcommand is exposed as a typed MCP tool once the server is running; tabs, clocks, and network rules persist across calls.
+          Requires Node 22+ and a C++20 toolchain for the native N-API bridge. Every <code>dub</code> subcommand is exposed as a typed MCP tool once the server is running. Tabs, clocks, and network rules persist across calls.
         </p>
 
         <div class="note platform">
           <strong>Platform availability:</strong> Compiled and verified end-to-end on <strong>Linux x86-64</strong> today.
-          <span><strong>macOS arm64</strong> binary support is coming soon (building on macOS currently compiles the Node N-API bridge/SDK only).</span>
+          <span><strong>macOS arm64</strong> binary support is coming soon (building on macOS currently compiles the Node N-API bridge and SDK only).</span>
         </div>
 
         <h3>1. Install Dub and fetch the Chromium fork</h3>
@@ -108,16 +235,18 @@ dub install</code></pre>
           <button class="copy-btn" type="button" data-copy>Copy</button>
         </div>
 
-        <h3>2. Start the browser and MCP server</h3>
+        <h3>2. Start the browser and authenticated MCP server</h3>
         <div class="code-block">
-          <pre><code>dub serve --port 7777
-<span class="cm"># Serves MCP over HTTP at http://127.0.0.1:7777/mcp</span></code></pre>
+          <pre><code>dub serve --port 7777 --print-one-time-token --sandbox-id local-1
+<span class="cm"># Serves MCP over HTTP at http://127.0.0.1:7777/mcp</span>
+<span class="cm"># Exchanges the single-use token once at POST http://127.0.0.1:7777/auth/exchange</span></code></pre>
           <button class="copy-btn" type="button" data-copy>Copy</button>
         </div>
 
-        <h3>3. Connect your MCP client</h3>
+        <h3>3. Connect your agent to Dub and Smithers Cloud</h3>
         <div class="code-block">
-          <pre><code>claude mcp add --transport http dub http://127.0.0.1:7777/mcp</code></pre>
+          <pre><code>claude mcp add --transport http dub http://127.0.0.1:7777/mcp
+claude mcp add --transport http smithers-cloud https://smithers.sh/api/mcp</code></pre>
           <button class="copy-btn" type="button" data-copy>Copy</button>
         </div>
       </section>
@@ -176,8 +305,8 @@ dub tools call --tab 1 actor.click --input '{"target":"Approve"}'</code></pre>
             <div class="stat-key">Pinned Chromium</div>
           </div>
           <div class="stat">
-            <div class="stat-val">13 / 13</div>
-            <div class="stat-key">Bridge &amp; unit tests</div>
+            <div class="stat-val">37 / 37</div>
+            <div class="stat-key">Bridge, fuzz &amp; auth tests</div>
           </div>
           <div class="stat">
             <div class="stat-val">4 / 4</div>
@@ -191,7 +320,7 @@ dub tools call --tab 1 actor.click --input '{"target":"Approve"}'</code></pre>
 
         <div class="evidence-group">
           <div class="evidence-label">
-            <strong>DEMO-01 &mdash; Rewrite the network</strong>
+            <strong>DEMO-01: Rewrite the network</strong>
             <code>net rewrite &middot; net patch &middot; net log --follow</code>
           </div>
           <figure>
@@ -204,7 +333,7 @@ dub tools call --tab 1 actor.click --input '{"target":"Approve"}'</code></pre>
 
         <div class="evidence-group">
           <div class="evidence-label">
-            <strong>DEMO-02 &mdash; Control the clock</strong>
+            <strong>DEMO-02: Control the clock</strong>
             <code>clock freeze &middot; clock step &middot; clock advance --by 31d</code>
           </div>
           <div class="shot-grid-3">
@@ -225,7 +354,7 @@ dub tools call --tab 1 actor.click --input '{"target":"Approve"}'</code></pre>
 
         <div class="evidence-group">
           <div class="evidence-label">
-            <strong>DEMO-03 &mdash; Act as you</strong>
+            <strong>DEMO-03: Act as you</strong>
             <code>profile attach &middot; tools list &middot; WebMCP + actor.click</code>
           </div>
           <figure>
@@ -239,7 +368,7 @@ dub tools call --tab 1 actor.click --input '{"target":"Approve"}'</code></pre>
     </main>
 
     <footer>
-      <span>Dub &middot; DangerouslyUseBrowser &middot; MIT License</span>
+      <span>Dub &middot; DangerouslyUseBrowser &middot; MIT License &middot; <a href="https://smithers.sh/smithersai/dangerouslyusebrowser">smithers.sh/smithersai/dangerouslyusebrowser</a></span>
       <span>Linux x86-64 verified &middot; macOS arm64 coming soon</span>
     </footer>
   </div>
@@ -254,6 +383,34 @@ dub tools call --tab 1 actor.click --input '{"target":"Approve"}'</code></pre>
         });
       });
     });
+
+    const personaBtns = Array.from(document.querySelectorAll('[data-persona]'));
+    const personaPanels = Array.from(document.querySelectorAll('[data-panel]'));
+    personaBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const target = btn.dataset.persona;
+        personaBtns.forEach(b => {
+          const active = b.dataset.persona === target;
+          b.classList.toggle('active', active);
+          b.setAttribute('aria-selected', String(active));
+        });
+        personaPanels.forEach(p => p.classList.toggle('active', p.dataset.panel === target));
+      });
+    });
+
+    fetch('audit-summary.json')
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (!data || !Array.isArray(data.categories)) return;
+        for (const cat of data.categories) {
+          const el = document.querySelector(`[data-cat="${cat.name}"] strong`);
+          if (el) {
+            el.textContent = String(cat.score);
+            el.style.color = cat.score >= 90 ? 'var(--ok)' : cat.score >= 50 ? '#d97706' : 'var(--accent)';
+          }
+        }
+      })
+      .catch(() => {});
 
     const video = document.getElementById('dub-demo-player');
     const videoSection = document.getElementById('demo-video');

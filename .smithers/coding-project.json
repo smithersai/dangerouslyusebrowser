@@ -1,0 +1,168 @@
+{
+  "wiki": true,
+  "wikiOutput": "site/wiki.html",
+  "reviewer": "dub-public-engineering-v1",
+  "implementation": "coding/implementation",
+  "seats": {
+    "coding/implement": "auto",
+    "coding/dispatch": "auto",
+    "coding/plan": "auto",
+    "coding/poc": "auto",
+    "coding/review": "auto",
+    "wiki/reviewer": "auto",
+    "repository/research": "auto",
+    "repository/evaluator": "auto",
+    "repository/author": "auto"
+  },
+  "pages": [
+    {
+      "id": "start-here",
+      "title": "Start here",
+      "purpose": "Understand Dub's end-to-end architecture from MCP agent call down to forked Chromium 157 C++ seams.",
+      "kind": "current",
+      "document": ".smithers/wiki/pages/start-here.md",
+      "inputs": [
+        "README.md",
+        "docs/spec.md",
+        "src/index.ts",
+        "src/cli.ts"
+      ],
+      "related": [
+        "native-bridge",
+        "chromium-seams",
+        "cloud-mcp-and-auth",
+        "factory-and-trust"
+      ]
+    },
+    {
+      "id": "native-bridge",
+      "title": "C++20 N-API bridge and IPC protocol",
+      "purpose": "Explain Protocol v1 framing, whole-call deadlines, push streams, and C ABI safety.",
+      "kind": "current",
+      "document": ".smithers/wiki/pages/native-bridge.md",
+      "inputs": [
+        "native/dub.h",
+        "native/dub.cc",
+        "native/addon.cc",
+        "src/native.ts",
+        "scripts/build-native.mjs"
+      ],
+      "related": [
+        "start-here",
+        "chromium-seams",
+        "plugins-and-triggers"
+      ]
+    },
+    {
+      "id": "chromium-seams",
+      "title": "Chromium 157 fork and overlay seams",
+      "purpose": "Map the pinned Chromium revision, five unified patches, overlay files, and GN build workflow.",
+      "kind": "current",
+      "document": ".smithers/wiki/pages/chromium-seams.md",
+      "inputs": [
+        "chromium/revision.json",
+        "scripts/chromium.mjs",
+        "scripts/verify-overlay.mjs",
+        "docs/seams.md",
+        "docs/first-build.md"
+      ],
+      "related": [
+        "start-here",
+        "network-and-clock",
+        "actor-and-webmcp"
+      ]
+    },
+    {
+      "id": "network-and-clock",
+      "title": "NetworkService rewrite and per-tab engine clock",
+      "purpose": "Detail DEMO-01 all-target network interception and DEMO-02 isolated per-tab V8 and Blink clocks.",
+      "kind": "current",
+      "document": ".smithers/wiki/pages/network-and-clock.md",
+      "inputs": [
+        "src/browser.ts",
+        "chromium/overlay/services/network/dub/dub_network_interceptor.h",
+        "chromium/overlay/chrome/browser/dub/dub_network.h",
+        "docs/evidence/2026-11-23/README.md"
+      ],
+      "related": [
+        "chromium-seams",
+        "actor-and-webmcp",
+        "plugins-and-triggers"
+      ]
+    },
+    {
+      "id": "actor-and-webmcp",
+      "title": "Persistent profiles, native actor tools, and WebMCP",
+      "purpose": "Document DEMO-03 profile ownership, trusted Chromium actor input, and live page-registered WebMCP tools.",
+      "kind": "current",
+      "document": ".smithers/wiki/pages/actor-and-webmcp.md",
+      "inputs": [
+        "src/launch.ts",
+        "src/commands.ts",
+        "chromium/overlay/chrome/common/dub_frame.mojom",
+        "docs/acceptance.md"
+      ],
+      "related": [
+        "chromium-seams",
+        "network-and-clock",
+        "cloud-mcp-and-auth"
+      ]
+    },
+    {
+      "id": "plugins-and-triggers",
+      "title": "QuickJS code mode, Jev, triggers, and TypeScript plugins",
+      "purpose": "Cover Milestone 4: persistent QuickJS REPL realms, typed Jev evaluators, BYO agent bridge, and hot-reloadable TS plugins.",
+      "kind": "current",
+      "document": ".smithers/wiki/pages/plugins-and-triggers.md",
+      "inputs": [
+        "src/runtime.ts",
+        "src/smithers-runtime.ts",
+        "src/jev.ts",
+        "src/agent-bridge.ts",
+        "src/triggers.ts",
+        "src/plugins.ts"
+      ],
+      "related": [
+        "native-bridge",
+        "network-and-clock",
+        "cloud-mcp-and-auth"
+      ]
+    },
+    {
+      "id": "cloud-mcp-and-auth",
+      "title": "Cloud MCP server and one-time sandbox auth",
+      "purpose": "Specify loopback defaults, SHA-256 single-use sandbox tokens, replay rejection, untrusted attenuation, and Smithers Cloud MCP.",
+      "kind": "current",
+      "document": ".smithers/wiki/pages/cloud-mcp-and-auth.md",
+      "inputs": [
+        "src/auth.ts",
+        "src/http.ts",
+        "src/cli.ts",
+        "scripts/mint-sandbox-auth.mjs",
+        ".mcp.json"
+      ],
+      "related": [
+        "start-here",
+        "factory-and-trust"
+      ]
+    },
+    {
+      "id": "factory-and-trust",
+      "title": "Smithers Cloud factory, object store, and trust model",
+      "purpose": "Document incremental smthrs targets, build.smithers.sh cache isolation, Uphill Lighthouse backpressure, and automated releases.",
+      "kind": "current",
+      "document": ".smithers/wiki/pages/factory-and-trust.md",
+      "inputs": [
+        ".smithers/WORKSPACE.ts",
+        ".smithers/FACTORY.ts",
+        ".smithers/home.json",
+        "PACKAGE.ts",
+        ".agents/uphill/uphill.yaml"
+      ],
+      "related": [
+        "start-here",
+        "cloud-mcp-and-auth"
+      ]
+    }
+  ]
+}

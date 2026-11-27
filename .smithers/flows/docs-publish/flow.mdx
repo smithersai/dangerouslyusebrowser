@@ -1,0 +1,17 @@
+---
+description: Rebuild and publish Dub's docs site, public wiki, Mythical History, Lighthouse audit report, and llms.txt to dangerouslyusebrowser.smithers.sh.
+capabilities:
+  - "fs:read:**"
+  - "fs:write:site/**"
+  - "proc:spawn:node scripts/*"
+model: repository/author
+disable-model-invocation: true
+budget:
+  tokens: 24000
+  milliseconds: 300000
+---
+
+Rebuild and publish the public Dub site and knowledge surfaces:
+1. Run `node scripts/build-site.mjs` (which builds `.uphill/report.json` -> `site/audit.html`, `.smithers/wiki/` -> `site/wiki.html` + `site/llms.txt`, and `jj` history -> `site/history.html`).
+2. Verify all generated HTML and `site/llms.txt` pass link and leak checks.
+3. Deploy `site/` via Cloudflare Workers Assets (`dangerouslyusebrowser.smithers.sh`) and verify HTTP 200 on `/`, `/audit.html`, `/wiki.html`, `/history.html`, and `/llms.txt`.

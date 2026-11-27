@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Engineering Wiki | Dub (DangerouslyUseBrowser)</title>
+  <meta name="description" content="Source-cited Obsidian-compatible engineering wiki for Dub (Chromium 157 fork, C++20 N-API, MCP one-time auth, and Smithers Cloud factory).">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .wiki-shell { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 28px; margin: 28px 0 56px; align-items: start; }
+    .wiki-sidebar { position: sticky; top: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+    .wiki-search { width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.04); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; color: var(--fg); font-size: 13px; margin-bottom: 12px; }
+    .wiki-search:focus { outline: none; border-color: var(--accent, #f59e0b); }
+    .wiki-nav { display: flex; flex-direction: column; gap: 6px; }
+    .wiki-nav-btn { text-align: left; background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 10px 11px; cursor: pointer; color: var(--fg); transition: background 0.15s, border-color 0.15s; }
+    .wiki-nav-btn:hover { background: rgba(255,255,255,0.04); }
+    .wiki-nav-btn.active { background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.35); }
+    .wiki-nav-title { display: block; font-weight: 600; font-size: 13.5px; margin-bottom: 2px; }
+    .wiki-nav-purpose { display: block; font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+    .wiki-article { display: none; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 28px 32px; }
+    .wiki-article.active { display: block; }
+    .wiki-article-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-bottom: 14px; margin-bottom: 18px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+    .wiki-pill { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399; padding: 2px 9px; border-radius: 999px; font-weight: 600; font-size: 11px; }
+    .wiki-raw-link { margin-left: auto; color: var(--accent, #f59e0b); text-decoration: none; }
+    .wiki-content h1 { margin-top: 0; font-size: 28px; }
+    .wiki-content h2 { margin-top: 28px; font-size: 19px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+    .wiki-content p, .wiki-content li { color: var(--muted); line-height: 1.7; }
+    .wiki-content strong { color: var(--fg); }
+    .wiki-content a { color: var(--accent, #f59e0b); text-decoration: none; }
+    .wiki-content a:hover { text-decoration: underline; }
+    .wiki-pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; color: var(--fg); }
+    .wiki-table-wrap { overflow-x: auto; margin: 16px 0; }
+    .wiki-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .wiki-table th, .wiki-table td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+    .wiki-table th { color: var(--fg); font-weight: 600; background: var(--code-bg); }
+    .wiki-quote { border-left: 3px solid var(--accent); margin: 14px 0; padding: 6px 14px; color: var(--muted); background: var(--accent-soft); border-radius: 0 8px 8px 0; }
+    .wiki-inputs { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--line); }
+    .wiki-inputs h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 10px; }
+    .wiki-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .wiki-chip { font-family: var(--mono); font-size: 11.5px; padding: 3px 8px; border-radius: 6px; background: var(--code-bg); border: 1px solid var(--line); color: var(--muted); }
+    @media (max-width: 860px) { .wiki-shell { grid-template-columns: 1fr; } .wiki-sidebar { position: static; } .wiki-article { padding: 20px; } }
+  </style>
+</head>
+<body>
+  <div class="wrap wrap-wide">
+    <header>
+      <a class="brand" href="/">
+        <span class="brand-name">Dub</span>
+        <span class="brand-pkg">dangerouslyusebrowser</span>
+      </a>
+      <nav aria-label="Primary">
+        <a href="/">Home</a>
+        <a href="/audit">Lighthouse Audit</a>
+        <a href="/wiki" aria-current="page">Wiki</a>
+        <a href="/history">Mythical History</a>
+        <a href="/llms.txt">llms.txt</a>
+        <a href="https://smithers.sh/smithersai/dangerouslyusebrowser">Smithers Cloud</a>
+      </nav>
+    </header>
+
+    <main>
+      <div class="eyebrow" style="margin-top:26px;">
+        <span class="dot" aria-hidden="true"></span>
+        <span>9 source-cited pages &middot; Obsidian-compatible &middot; Indexed at llms.txt</span>
+      </div>
+      <h1>Dub Engineering Wiki</h1>
+      <p class="lead">
+        Every page below is declared in <code>.smithers/coding-project.json</code>, bound to verified source inputs,
+        and served to agents via <code>https://dangerouslyusebrowser.smithers.sh/llms.txt</code>.
+      </p>
+
+      <div class="wiki-shell">
+        <aside class="wiki-sidebar">
+          <input id="wiki-search" class="wiki-search" type="search" placeholder="Filter wiki pages..." aria-label="Filter wiki pages">
+          <div class="wiki-nav" id="wiki-nav">
+            <button class="wiki-nav-btn active" data-page="start-here" type="button">
+        <span class="wiki-nav-title">Start here</span>
+        <span class="wiki-nav-purpose">Understand Dub's end-to-end architecture from MCP agent call down to forked Chromium 157 C++ seams.</span>
+      </button>
+<button class="wiki-nav-btn" data-page="native-bridge" type="button">
+        <span class="wiki-nav-title">C++20 N-API bridge and IPC protocol</span>
+        <span class="wiki-nav-purpose">Explain Protocol v1 framing, whole-call deadlines, push streams, and C ABI safety.</span>
+      </button>
+<button class="wiki-nav-btn" data-page="chromium-seams" type="button">
+        <span class="wiki-nav-title">Chromium 157 fork and overlay seams</span>
+        <span class="wiki-nav-purpose">Map the pinned Chromium revision, five unified patches, overlay files, and GN build workflow.</span>
+      </button>
+<button class="wiki-nav-btn" data-page="network-and-clock" type="button">
+        <span class="wiki-nav-title">NetworkService rewrite and per-tab engine clock</span>
+        <span class="wiki-nav-purpose">Detail DEMO-01 all-target network interception and DEMO-02 isolated per-tab V8 and Blink clocks.</span>
+      </button>
+<button class="wiki-nav-btn" data-page="actor-and-webmcp" type="button">
+        <span class="wiki-nav-title">Persistent profiles, native actor tools, and WebMCP</span>
+        <span class="wiki-nav-purpose">Document DEMO-03 profile ownership, trusted Chromium actor input, and live page-registered WebMCP tools.</span>
+      </button>
+<button class="wiki-nav-btn" data-page="plugins-and-triggers" type="button">
+        <span class="wiki-nav-title">QuickJS code mode, Jev, triggers, and TypeScript plugins</span>
+        <span class="wiki-nav-purpose">Cover Milestone 4: persistent QuickJS REPL realms, typed Jev evaluators, BYO agent bridge, and hot-reloadable TS plugins.</span>
+      </button>
+<button class="wiki-nav-btn" data-page="cloud-mcp-and-auth" type="button">
+        <span class="wiki-nav-title">Cloud MCP server and one-time sandbox auth</span>
+        <span class="wiki-nav-purpose">Specify loopback defaults, SHA-256 single-use sandbox tokens, replay rejection, untrusted attenuation, and Smithers Cloud MCP.</span>
+      </button>
+<button class="wiki-nav-btn" data-page="factory-and-trust" type="button">
+        <span class="wiki-nav-title">Smithers Cloud factory, object store, and trust model</span>
+        <span class="wiki-nav-purpose">Document incremental smthrs targets, build.smithers.sh cache isolation, Uphill Lighthouse backpressure, and automated releases.</span>
+      </button>
+<button class="wiki-nav-btn" data-page="mythical-history" type="button">
+        <span class="wiki-nav-title">Mythical History</span>
+        <span class="wiki-nav-purpose">Chronological source-grounded history of Dub from verified jj commits and launch evidence.</span>
+      </button>
+          </div>
+        </aside>
+        <section class="wiki-main">
+          
+    <article class="wiki-article active" id="page-start-here" data-page-id="start-here" data-search="start here understand dub's end-to-end architecture from mcp agent call down to forked chromium 157 c++ seams. readme.md docs/spec.md src/index.ts src/cli.ts">
+      <div class="wiki-article-meta">
+        <span class="wiki-pill">Source-cited</span>
+        <code>.smithers/wiki/pages/start-here.md</code>
+        <a class="wiki-raw-link" href="docs/start-here.md">Raw Markdown</a>
+      </div>
+      <div class="wiki-content"><h1>Start here</h1>
+<p>Dub (<strong>DangerouslyUseBrowser</strong>) is a real Chromium <code>157.0.8082.0</code> fork that exposes browser internals directly to coding agents through native C++20 N-API bindings and an <a href="https://github.com/wevm/incur" target="_blank" rel="noopener">incur</a> MCP server. It is not Playwright, not a stock-CDP wrapper, and not Electron.</p>
+<h2>Why a real Chromium fork</h2>
+<p>Stock automation protocols sit outside the browser engine's privileged seams. Dub patches Chromium directly at the C++ browser, renderer, V8, Blink, and NetworkService boundaries so agents can:</p>
+<ul>
+<li>Rewrite, block, redirect, and decode-patch network traffic across tabs, dedicated/shared/service workers, CacheStorage, and HTTP cache (<code>DEMO-01</code>).</li>
+<li>Freeze, advance by 31 days, and frame-step a single tab's V8 + Blink clock while leaving sibling tabs in the same renderer on real wall time (<code>DEMO-02</code>).</li>
+<li>Attach to a persistent profile, dispatch native Chromium actor input (<code>isTrusted: true</code>), and call live WebMCP page tools (<code>DEMO-03</code>).</li>
+<li>Run persistent QuickJS TypeScript code-mode cells, typed Jev evaluators, reactive push-stream triggers, and hot-reloadable TypeScript plugins (<code>Milestone 4</code>).</li>
+</ul>
+<h2>Repository map</h2>
+<div class="wiki-table-wrap"><table class="wiki-table"><thead><tr>
+<th>Path</th>
+<th>Owning layer</th>
+</tr></thead><tbody>
+<tr>
+<td><code>native/</code></td>
+<td>C++20 C ABI and N-API v8 bridge (<code>dub.h</code>, <code>dub.cc</code>, <code>addon.cc</code>)</td>
+</tr>
+<tr>
+<td><code>chromium/</code></td>
+<td>Pinned Chromium <code>157.0.8082.0</code> (<code>revision.json</code>), 21 overlay files, 5 unified patches</td>
+</tr>
+<tr>
+<td><code>src/</code></td>
+<td>TypeScript SDK, incur CLI/MCP commands, <code>TokenAuthority</code>, HTTP boundary, and <code>DubRuntime</code></td>
+</tr>
+<tr>
+<td><code>tests/</code></td>
+<td>Unit, fuzz, auth, plugin, and compiled-fork <code>tests/browser/</code> acceptance suites</td>
+</tr>
+<tr>
+<td><code>.smithers/</code></td>
+<td>Smithers Cloud factory (<code>FACTORY.ts</code>, <code>WORKSPACE.ts</code>, <code>home.json</code>, flows, and this wiki)</td>
+</tr>
+<tr>
+<td><code>.agents/uphill/</code></td>
+<td>Lighthouse-style backpressure audit metrics and baselines</td>
+</tr>
+<tr>
+<td><code>site/</code></td>
+<td>Public docs, personalized factory UI, live audit report, wiki, and <code>llms.txt</code></td>
+</tr>
+</tbody></table></div>
+<h2>Evidence rule</h2>
+<p>Dub separates bridge-fixture tests from compiled-fork browser proofs. Transport fixtures validate N-API framing, deadlines, MCP schemas, auth, and QuickJS runtimes, never Chromium behavior. Compiled-fork browser behavior is verified by <code>DUB_BROWSER=/path/to/chrome npm run test:browser</code> and archived under <code>docs/evidence/2026-11-23/README.md</code>.</p>
+<h2>Related pages</h2>
+<ul>
+<li><a href="#page-native-bridge" data-wiki-link="native-bridge">native-bridge</a></li>
+<li><a href="#page-chromium-seams" data-wiki-link="chromium-seams">chromium-seams</a></li>
+<li><a href="#page-cloud-mcp-and-auth" data-wiki-link="cloud-mcp-and-auth">cloud-mcp-and-auth</a></li>
+<li><a href="#page-factory-and-trust" data-wiki-link="factory-and-trust">factory-and-trust</a></li>
+</ul></div>
+      <div class="wiki-inputs">
+        <h3>Pinned Source Inputs</h3>
+        <div class="wiki-chip-row">
+          <code class="wiki-chip">README.md</code><code class="wiki-chip">docs/spec.md</code><code class="wiki-chip">src/index.ts</code><code class="wiki-chip">src/cli.ts</code>
+        </div>
+      </div>
+    </article>
+
+    <article class="wiki-article" id="page-native-bridge" data-page-id="native-bridge" data-search="c++20 n-api bridge and ipc protocol explain protocol v1 framing, whole-call deadlines, push streams, and c abi safety. native/dub.h native/dub.cc native/addon.cc src/native.ts scripts/build-native.mjs">
+      <div class="wiki-article-meta">
+        <span class="wiki-pill">Source-cited</span>
+        <code>.smithers/wiki/pages/native-bridge.md</code>
+        <a class="wiki-raw-link" href="docs/native-bridge.md">Raw Markdown</a>
+      </div>
+      <div class="wiki-content"><h1>C++20 N-API bridge and IPC protocol</h1>
+<p>Dub keeps Chromium out-of-process so the browser's multiprocess sandbox, UI loop, and V8 isolates remain isolated from Node.js. Communication crosses a small C++20 N-API v8 addon (<code>native/addon.cc</code>, <code>native/dub.cc</code>, <code>native/dub.h</code>) over a private local <code>AF_UNIX</code> socket.</p>
+<h2>Protocol v1 wire format</h2>
+<pre class="wiki-pre"><code class="lang-text">+---------------------------+----------------------------------------+
+| uint32 big-endian length  | UTF-8 JSON payload (1 byte to 16 MiB)  |
++---------------------------+----------------------------------------+</code></pre>
+<ul>
+<li><strong>Request envelope</strong>: <code>{&quot;protocol&quot;:1,&quot;id&quot;:&quot;&lt;uuid&gt;&quot;,&quot;method&quot;:&quot;&lt;name&gt;&quot;,&quot;params&quot;:{...},&quot;timeoutMs&quot;:30000}</code></li>
+<li><strong>Response envelope</strong>: echoes <code>id</code> and carries either <code>result</code> or <code>{&quot;error&quot;:{&quot;code&quot;:&quot;...&quot;,&quot;message&quot;:&quot;...&quot;}}</code>.</li>
+<li><strong>Whole-call deadlines</strong>: <code>dub_call</code> enforces an absolute monotonic deadline. A stalled browser or slow one-byte trickle cannot reset the timer.</li>
+<li><strong>No silent retries</strong>: Timeout or disconnect never implies rollback and never retries side-effecting commands automatically.</li>
+</ul>
+<h2>Push event stream (<code>subscribe</code>)</h2>
+<p>Milestone 4 added <code>NativeBridge.subscribe()</code> backed by persistent non-blocking <code>AF_UNIX</code> streaming in <code>native/addon.cc</code> and <code>native/dub.cc</code>. Chromium pushes live network callbacks, console entries, dialogs, navigations, downloads, and exposed page calls into Node without polling, powering <code>src/triggers.ts</code> and <code>src/plugins.ts</code>.</p>
+<h2>Compilation and safety invariants</h2>
+<p><code>scripts/build-native.mjs</code> compiles <code>native/addon.cc</code> and <code>native/dub.cc</code> with:</p>
+<pre class="wiki-pre"><code class="lang-text">-std=c++20 -O2 -Wall -Wextra -Werror -fPIC -shared -DNAPI_VERSION=8</code></pre>
+<ul>
+<li>Zero <code>abort()</code>, <code>exit()</code>, or <code>std::terminate()</code> calls are allowed in <code>native/</code> (enforced continuously by Uphill's <code>cpp-no-abort</code> gate).</li>
+<li>Prebuilt binaries ship under <code>prebuilds/darwin-arm64/dub.node</code> and <code>prebuilds/linux-x64/dub.node</code>, and <code>scripts/install.mjs</code> compiles on demand when a matching prebuild is absent.</li>
+<li><code>tests/native.test.mjs</code> and <code>tests/fuzz.test.mjs</code> verify fragmented UTF-8 reads, parallel calls, whole-call deadlines, slow trickles, 120 malformed/truncated/oversized frames, and clean subscription teardown.</li>
+</ul>
+<h2>Related pages</h2>
+<ul>
+<li><a href="#page-start-here" data-wiki-link="start-here">start-here</a></li>
+<li><a href="#page-chromium-seams" data-wiki-link="chromium-seams">chromium-seams</a></li>
+<li><a href="#page-plugins-and-triggers" data-wiki-link="plugins-and-triggers">plugins-and-triggers</a></li>
+</ul></div>
+      <div class="wiki-inputs">
+        <h3>Pinned Source Inputs</h3>
+        <div class="wiki-chip-row">
+          <code class="wiki-chip">native/dub.h</code><code class="wiki-chip">native/dub.cc</code><code class="wiki-chip">native/addon.cc</code><code class="wiki-chip">src/native.ts</code><code class="wiki-chip">scripts/build-native.mjs</code>
+        </div>
+      </div>
+    </article>
+
+    <article class="wiki-article" id="page-chromium-seams" data-page-id="chromium-seams" data-search="chromium 157 fork and overlay seams map the pinned chromium revision, five unified patches, overlay files, and gn build workflow. chromium/revision.json scripts/chromium.mjs scripts/verify-overlay.mjs docs/seams.md docs/first-build.md">
+      <div class="wiki-article-meta">
+        <span class="wiki-pill">Source-cited</span>
+        <code>.smithers/wiki/pages/chromium-seams.md</code>
+        <a class="wiki-raw-link" href="docs/chromium-seams.md">Raw Markdown</a>
+      </div>
+      <div class="wiki-content"><h1>Chromium 157 fork and overlay seams</h1>
+<p>Upstream Chromium source stays outside this repository. Dub pins an exact revision in <code>chromium/revision.json</code> and layers 21 overlay files plus 5 unified patches via <code>scripts/chromium.mjs</code>.</p>
+<h2>Pinned baseline</h2>
+<ul>
+<li><strong>Version</strong>: <code>157.0.8082.0</code></li>
+<li><strong>Commit</strong>: <code>0e331aaf43bf5e1ffe16e65140de2d925c18f0a2</code></li>
+<li><strong>Protocol</strong>: <code>1</code></li>
+</ul>
+<h2>Patch series</h2>
+<div class="wiki-table-wrap"><table class="wiki-table"><thead><tr>
+<th>Patch</th>
+<th>Milestone</th>
+<th>Scope</th>
+</tr></thead><tbody>
+<tr>
+<td><code>0001-stage-a-dub-core.patch</code></td>
+<td>Stage A</td>
+<td>GN integration in <code>chrome/browser:core</code>, <code>PostBrowserStart</code> socket startup, clean shutdown before profile destruction</td>
+</tr>
+<tr>
+<td><code>0002-milestone-1-renderer-webmcp-upload.patch</code></td>
+<td>Milestone 1</td>
+<td>Renderer frame observer (<code>dub_frame.mojom</code>), promise-aware eval, native actor upload, live WebMCP tool registry</td>
+</tr>
+<tr>
+<td><code>0003-milestone-2-network-interception.patch</code></td>
+<td>Milestone 2</td>
+<td>NetworkService-level interception (<code>services/network/dub/</code>) across tabs, workers, and caches</td>
+</tr>
+<tr>
+<td><code>0004-milestone-3-per-tab-clock.patch</code></td>
+<td>Milestone 3</td>
+<td>Per-tab isolated V8 and Blink engine clock with frame stepping and monotonic resume</td>
+</tr>
+<tr>
+<td><code>0005-milestone-4-control-events-plugins.patch</code></td>
+<td>Milestone 4</td>
+<td>Push event stream (<code>dub_events</code>), extended control dispatch (<code>dub_dispatch_extra</code>), browser state hooks</td>
+</tr>
+</tbody></table></div>
+<h2>Lifecycle and profile ownership</h2>
+<p>Following <code>docs/first-build.md</code>:</p>
+<ul>
+<li><code>dub serve</code> starts the native socket at the end of <code>PostBrowserStart</code> and invalidates pending callbacks before desktop <code>PostMainMessageLoopRun</code> teardown.</li>
+<li>A serving session retains its selected profile when the last browser window closes, preventing accidental session loss.</li>
+<li>The runtime capability handshake (<code>browser.info</code>) advertises implemented methods and tools so <code>createCommands()</code> only exposes capabilities the running binary supports.</li>
+<li><code>scripts/verify-overlay.mjs</code> runs on every <code>smthrs ci //:overlay-check</code> and Uphill audit to validate <code>revision.json</code>, unified patch headers, non-empty overlay files, and zero private infrastructure leaks.</li>
+</ul>
+<h2>Related pages</h2>
+<ul>
+<li><a href="#page-start-here" data-wiki-link="start-here">start-here</a></li>
+<li><a href="#page-network-and-clock" data-wiki-link="network-and-clock">network-and-clock</a></li>
+<li><a href="#page-actor-and-webmcp" data-wiki-link="actor-and-webmcp">actor-and-webmcp</a></li>
+</ul></div>
+      <div class="wiki-inputs">
+        <h3>Pinned Source Inputs</h3>
+        <div class="wiki-chip-row">
+          <code class="wiki-chip">chromium/revision.json</code><code class="wiki-chip">scripts/chromium.mjs</code><code class="wiki-chip">scripts/verify-overlay.mjs</code><code class="wiki-chip">docs/seams.md</code><code class="wiki-chip">docs/first-build.md</code>
+        </div>
+      </div>
+    </article>
+
+    <article class="wiki-article" id="page-network-and-clock" data-page-id="network-and-clock" data-search="networkservice rewrite and per-tab engine clock detail demo-01 all-target network interception and demo-02 isolated per-tab v8 and blink clocks. src/browser.ts chromium/overlay/services/network/dub/dub_network_interceptor.h chromium/overlay/chrome/browser/dub/dub_network.h docs/evidence/2026-11-23/readme.md">
+      <div class="wiki-article-meta">
+        <span class="wiki-pill">Source-cited</span>
+        <code>.smithers/wiki/pages/network-and-clock.md</code>
+        <a class="wiki-raw-link" href="docs/network-and-clock.md">Raw Markdown</a>
+      </div>
+      <div class="wiki-content"><h1>NetworkService rewrite and per-tab engine clock</h1>
+<p>Dub's first two flagship proofs attack the two hardest limits of stock browser automation: universal network control and engine-coherent time travel.</p>
+<h2>DEMO-01: NetworkService-level interception</h2>
+<p>Navigation-only hooks miss <code>fetch</code>, dedicated workers, shared workers, service workers, and cache hits. Dub installs <code>DubNetworkInterceptor</code> directly inside Chromium's NetworkService (<code>chromium/overlay/services/network/dub/dub_network_interceptor.cc</code>) synchronized over Mojo from the browser process (<code>chromium/overlay/chrome/browser/dub/dub_network.cc</code>).</p>
+<p>Verified capabilities (<code>tests/browser/milestone-2-network.test.mjs</code>):</p>
+<ul>
+<li>Live rule add, list, remove, and precedence evaluation without restarting tabs.</li>
+<li>Mock responses (status, headers, body/JSON), request blocking, redirects, header mutation, and decoded-body search/replace patching (no double-patching across gzip/chunked streams).</li>
+<li>Coverage across top-level navigation, <code>fetch</code>, dedicated/shared/service workers, CacheStorage, and HTTP disk cache.</li>
+<li>Bounded <code>net log --follow</code> stream with explicit gap reporting when entries rotate.</li>
+</ul>
+<h2>DEMO-02: Per-tab isolated V8 and Blink clock</h2>
+<p>Process-wide virtual time perturbs Chromium internals and corrupts sibling tabs sharing a renderer process. Dub patches V8 and Blink (<code>0004-milestone-3-per-tab-clock.patch</code>) with page-scoped clock domains while keeping browser IPC deadlines and network housekeeping on real monotonic time.</p>
+<p>Verified capabilities (<code>tests/browser/milestone-3-clock.test.mjs</code>):</p>
+<ul>
+<li>Freeze at an arbitrary ISO epoch (<code>clock.freeze</code>) and synchronize <code>Date.now()</code>, <code>new Date()</code>, <code>performance.now()</code>, <code>setTimeout</code>, <code>setInterval</code>, <code>requestAnimationFrame</code>, and CSS animations.</li>
+<li>Advance 31 days (<code>clock.advance --by 31d</code>) with bounded interval fire caps so infinite page timers cannot hang the browser.</li>
+<li>Step exact animation frames (<code>clock.stepFrames</code>) and verify committed compositor pixel diffs via screenshot.</li>
+<li>Same-renderer isolation: two same-origin tabs verified to share one renderer PID stay independent (tab A freezes/jumps while tab B stays on wall clock).</li>
+<li>DedicatedWorker inheritance and monotonic resume (<code>clock.resume</code>).</li>
+</ul>
+<h2>Related pages</h2>
+<ul>
+<li><a href="#page-chromium-seams" data-wiki-link="chromium-seams">chromium-seams</a></li>
+<li><a href="#page-actor-and-webmcp" data-wiki-link="actor-and-webmcp">actor-and-webmcp</a></li>
+<li><a href="#page-plugins-and-triggers" data-wiki-link="plugins-and-triggers">plugins-and-triggers</a></li>
+</ul></div>
+      <div class="wiki-inputs">
+        <h3>Pinned Source Inputs</h3>
+        <div class="wiki-chip-row">
+          <code class="wiki-chip">src/browser.ts</code><code class="wiki-chip">chromium/overlay/services/network/dub/dub_network_interceptor.h</code><code class="wiki-chip">chromium/overlay/chrome/browser/dub/dub_network.h</code><code class="wiki-chip">docs/evidence/2026-11-23/README.md</code>
+        </div>
+      </div>
+    </article>
+
+    <article class="wiki-article" id="page-actor-and-webmcp" data-page-id="actor-and-webmcp" data-search="persistent profiles, native actor tools, and webmcp document demo-03 profile ownership, trusted chromium actor input, and live page-registered webmcp tools. src/launch.ts src/commands.ts chromium/overlay/chrome/common/dub_frame.mojom docs/acceptance.md">
+      <div class="wiki-article-meta">
+        <span class="wiki-pill">Source-cited</span>
+        <code>.smithers/wiki/pages/actor-and-webmcp.md</code>
+        <a class="wiki-raw-link" href="docs/actor-and-webmcp.md">Raw Markdown</a>
+      </div>
+      <div class="wiki-content"><h1>Persistent profiles, native actor tools, and WebMCP</h1>
+<p>DEMO-03 gives agents direct access to real authenticated browser sessions through persistent Chromium profiles, native trusted input, and page-registered WebMCP tools.</p>
+<h2>Persistent profile ownership (<code>src/launch.ts</code>)</h2>
+<ul>
+<li>By default, <code>dub serve</code> creates and owns an isolated persistent profile directory so cookies, IndexedDB, and session storage survive browser restarts without touching the user's daily browser.</li>
+<li>Explicit <code>--profile</code> or <code>profile attach</code> can select an existing compatible Chromium profile. Dub respects Chromium's ordinary profile lock and never extracts, copies, or inspects credential databases during development.</li>
+<li>Closing the last window does not terminate a serving session; the selected profile remains pinned until explicit shutdown (<code>SIGINT</code>/<code>SIGTERM</code>).</li>
+</ul>
+<h2>Native Chromium actor tools</h2>
+<p>Instead of synthesizing untrusted DOM clicks, Dub invokes Chromium's native actor delegates (<code>actor.click</code>, <code>actor.type</code>, <code>actor.select</code>, <code>actor.scroll</code>, <code>actor.upload_file</code>, and navigation actions) from the browser process:</p>
+<ul>
+<li>Dispatched events arrive in the page with <code>isTrusted: true</code>.</li>
+<li>Text and selector targeting detects stale targets and returns Chromium's native failure codes.</li>
+<li>File upload reads only the explicitly named local fixture path.</li>
+</ul>
+<h2>Live WebMCP page tools (<code>dub_frame.mojom</code>)</h2>
+<p>When a web application registers tools through WebMCP (<code>navigator.modelContext</code>), Dub's renderer observer (<code>chromium/overlay/chrome/renderer/dub/dub_render_frame_observer.cc</code>) tracks tools dynamically across frames and navigations:</p>
+<ul>
+<li><code>tools list</code> returns current tool names, JSON input schemas, and frame IDs.</li>
+<li><code>tools call</code> invokes the registered page handler and preserves structured return values, rejections, and cancellations.</li>
+<li>Cross-document navigation invalidates stale registrations so pending invocations never wedge.</li>
+</ul>
+<h2>Related pages</h2>
+<ul>
+<li><a href="#page-chromium-seams" data-wiki-link="chromium-seams">chromium-seams</a></li>
+<li><a href="#page-network-and-clock" data-wiki-link="network-and-clock">network-and-clock</a></li>
+<li><a href="#page-cloud-mcp-and-auth" data-wiki-link="cloud-mcp-and-auth">cloud-mcp-and-auth</a></li>
+</ul></div>
+      <div class="wiki-inputs">
+        <h3>Pinned Source Inputs</h3>
+        <div class="wiki-chip-row">
+          <code class="wiki-chip">src/launch.ts</code><code class="wiki-chip">src/commands.ts</code><code class="wiki-chip">chromium/overlay/chrome/common/dub_frame.mojom</code><code class="wiki-chip">docs/acceptance.md</code>
+        </div>
+      </div>
+    </article>
+
+    <article class="wiki-article" id="page-plugins-and-triggers" data-page-id="plugins-and-triggers" data-search="quickjs code mode, jev, triggers, and typescript plugins cover milestone 4: persistent quickjs repl realms, typed jev evaluators, byo agent bridge, and hot-reloadable ts plugins. src/runtime.ts src/smithers-runtime.ts src/jev.ts src/agent-bridge.ts src/triggers.ts src/plugins.ts">
+      <div class="wiki-article-meta">
+        <span class="wiki-pill">Source-cited</span>
+        <code>.smithers/wiki/pages/plugins-and-triggers.md</code>
+        <a class="wiki-raw-link" href="docs/plugins-and-triggers.md">Raw Markdown</a>
+      </div>
+      <div class="wiki-content"><h1>QuickJS code mode, Jev, triggers, and TypeScript plugins</h1>
+<p>Milestone 4 turns Dub into a programmable browser runtime built directly on Smithers primitives (<code>@smthrs/harness</code>, <code>@smthrs/model</code>, and <code>effect</code>). All five runtime subsystems are composed inside <code>DubRuntime</code> (<code>src/runtime.ts</code>).</p>
+<h2>Smithers QuickJS code mode (<code>src/smithers-runtime.ts</code>)</h2>
+<p><code>SmithersCodeRuntime</code> executes TypeScript and JavaScript cells inside persistent, isolated QuickJS REPL realms (<code>@smthrs/harness/Sandbox</code>):</p>
+<ul>
+<li>Cells call Dub browser operations through typed <code>ctx.call(...)</code> flows (<code>tabs.list</code>, <code>page.evaluate</code>, <code>net.mock</code>, <code>clock.advance</code>, <code>jev.ask</code>, <code>agent.turn</code>, and more) across primitive JSON boundaries.</li>
+<li>Every cell is bounded by a wall-clock <code>timeoutMs</code> and a <code>maxCalls</code> budget, preventing runaway scripts from stalling the host.</li>
+<li>Realms retain lexical bindings across frames (<code>realmId</code>) and tear down cleanly on <code>runtime.close()</code>.</li>
+</ul>
+<h2>Typed Jev evaluators (<code>src/jev.ts</code>)</h2>
+<p><code>JevClient</code> wraps <code>@smthrs/model/Evaluator</code> so every enumerable browser decision (boolean, choice, or numeric score) runs with typed failure semantics at the seam instead of silent LLM fallback:</p>
+<ul>
+<li>Supports Vercel AI Gateway in production and deterministic scripted evaluators in tests (<code>Evaluator.layerScripted</code>).</li>
+<li>Each question instruction is prefixed with its ID to match Smithers StandardFlows conventions.</li>
+</ul>
+<h2>Reactive triggers and BYO agent bridge (<code>src/triggers.ts</code>, <code>src/agent-bridge.ts</code>)</h2>
+<p><code>TriggerEngine</code> subscribes to Chromium's live push stream (<code>net.request</code>, <code>net.response</code>, <code>page.dialog</code>, <code>page.navigate</code>, <code>page.console</code>, <code>page.error</code>, <code>download</code>, <code>ws.message</code>, <code>page.exposed</code>) and executes three reactive modes:</p>
+<ul>
+<li><code>code</code>: evaluates a TypeScript cell in QuickJS with <code>event</code> injected.</li>
+<li><code>jev</code>: queries <code>JevClient</code> and routes deterministically to a decision, a QuickJS cell, or agent escalation.</li>
+<li><code>agent</code>: hands off a structured turn to any BYO agent adapter (CLI such as <code>claude -p</code>, OpenAI, Anthropic, or webhook HTTP endpoint) with Dub's <code>/mcp</code> endpoint attached.</li>
+</ul>
+<h2>Hot-reloadable TypeScript plugins (<code>src/plugins.ts</code>)</h2>
+<p><code>PluginManager</code> loads <code>.ts</code> or <code>.js</code> plugins (<code>definePlugin</code>), transpiles TypeScript via Sucrase, supports <code>--watch</code> hot-reload, registers custom MCP tools, synthetic WebMCP page tools, command middleware, and network callbacks, and tears down every resource atomically on unload or reload.</p>
+<h2>Related pages</h2>
+<ul>
+<li><a href="#page-native-bridge" data-wiki-link="native-bridge">native-bridge</a></li>
+<li><a href="#page-network-and-clock" data-wiki-link="network-and-clock">network-and-clock</a></li>
+<li><a href="#page-cloud-mcp-and-auth" data-wiki-link="cloud-mcp-and-auth">cloud-mcp-and-auth</a></li>
+</ul></div>
+      <div class="wiki-inputs">
+        <h3>Pinned Source Inputs</h3>
+        <div class="wiki-chip-row">
+          <code class="wiki-chip">src/runtime.ts</code><code class="wiki-chip">src/smithers-runtime.ts</code><code class="wiki-chip">src/jev.ts</code><code class="wiki-chip">src/agent-bridge.ts</code><code class="wiki-chip">src/triggers.ts</code><code class="wiki-chip">src/plugins.ts</code>
+        </div>
+      </div>
+    </article>
+
+    <article class="wiki-article" id="page-cloud-mcp-and-auth" data-page-id="cloud-mcp-and-auth" data-search="cloud mcp server and one-time sandbox auth specify loopback defaults, sha-256 single-use sandbox tokens, replay rejection, untrusted attenuation, and smithers cloud mcp. src/auth.ts src/http.ts src/cli.ts scripts/mint-sandbox-auth.mjs .mcp.json">
+      <div class="wiki-article-meta">
+        <span class="wiki-pill">Source-cited</span>
+        <code>.smithers/wiki/pages/cloud-mcp-and-auth.md</code>
+        <a class="wiki-raw-link" href="docs/cloud-mcp-and-auth.md">Raw Markdown</a>
+      </div>
+      <div class="wiki-content"><h1>Cloud MCP server and one-time sandbox auth</h1>
+<p>Dub dogfoods Smithers Cloud's Bring-Your-Own-Agent (BYOA) MCP architecture in both directions: agents developing Dub connect to <strong>Smithers Cloud MCP</strong> (<code>https://smithers.sh/api/mcp</code>), and agents driving a browser connect to <strong>Dub's authenticated HTTP MCP server</strong> (<code>dub serve /mcp</code>) using short-lived, single-use sandbox tokens.</p>
+<h2>One-time sandbox authentication (<code>src/auth.ts</code>, <code>src/http.ts</code>)</h2>
+<pre class="wiki-pre"><code class="lang-text">Maintainer / Controller                      Sandbox / BYO Agent
+        |                                             |
+        |-- POST /auth/one-time-tokens -------------&gt; | (receives dub_ott_... ONCE)
+        |                                             |
+        |                                POST /auth/exchange {&quot;token&quot;:&quot;dub_ott_...&quot;}
+        |                                             |---&gt; atomic single-use mark
+        |                                             |&lt;--- dub_ses_... (scoped TTL)
+        |                                             |
+        |                                POST /mcp (Authorization: Bearer dub_ses_...)
+        |                                             |---&gt; verified X-Dub-Trust header</code></pre>
+<p>Security invariants verified by <code>tests/auth.test.mjs</code> and 200 randomized fuzz trials in <code>tests/fuzz.test.mjs</code>:</p>
+<ul>
+<li><strong>Loopback default</strong>: <code>dub serve</code> binds <code>127.0.0.1</code> by default and refuses non-loopback hosts without authentication.</li>
+<li><strong>Host and Origin pinning</strong>: Every HTTP request is checked against the allowed Host allowlist and same-origin policy, blocking DNS rebinding and cross-site requests.</li>
+<li><strong>SHA-256 hashed storage + timing-safe comparison</strong>: Raw <code>dub_ott_...</code> and <code>dub_ses_...</code> secrets are never stored in memory or logs. Only SHA-256 digests are retained and compared via <code>crypto.timingSafeEqual</code>.</li>
+<li><strong>Atomic single-use redemption</strong>: <code>redeemOneTimeToken()</code> marks the token used before emitting the session token. Any replay fails with HTTP <code>409</code> (<code>OTT_ALREADY_USED</code>).</li>
+<li><strong>Untrusted scope attenuation</strong>: <code>contributor</code> and <code>viewer</code> principals always carry <code>trust: &quot;untrusted&quot;</code> and are stripped of <code>cache:write</code>, <code>auth:mint</code>, <code>mcp:admin</code>, <code>plugin:manage</code>, and <code>profile:attach</code>.</li>
+<li><strong>Sanitized audit ring buffer</strong>: The last 128 auth events (<code>mint</code>, <code>redeem</code>, <code>replay_rejected</code>, <code>expired_rejected</code>, <code>revoke</code>) are queryable by trusted maintainers on <code>GET /auth/audit</code> with zero secret bytes logged.</li>
+</ul>
+<h2>Printing one-time tokens for sandboxes and agents</h2>
+<p>Start Dub with an immediate single-use bootstrap token:</p>
+<pre class="wiki-pre"><code class="lang-sh">dub serve --port 7777 --print-one-time-token --sandbox-id ci-42</code></pre>
+<p>Or mint additional one-time tokens from a running authenticated server or Smithers gateway:</p>
+<pre class="wiki-pre"><code class="lang-sh">DUB_TOKEN=... node scripts/mint-sandbox-auth.mjs --principal agent:reviewer --role agent --ttlSeconds 120
+SMITHERS_TOKEN=... node scripts/mint-sandbox-auth.mjs --target smithers --ttlSeconds 120</code></pre>
+<h2>Root-input-tracing security table</h2>
+<p>Every privileged operation in Dub and its Smithers Cloud factory traces back to its exact origin input and enforcement boundary:</p>
+<div class="wiki-table-wrap"><table class="wiki-table"><thead><tr>
+<th>Privileged step</th>
+<th>Origin input</th>
+<th>Boundary check</th>
+<th>Failure behavior</th>
+</tr></thead><tbody>
+<tr>
+<td>Mint one-time sandbox token (<code>POST /auth/one-time-tokens</code>)</td>
+<td>HTTP <code>Authorization</code> header + JSON body</td>
+<td>Requires <code>trust === &quot;trusted&quot;</code> and <code>auth:mint</code> scope verified via SHA-256 + <code>timingSafeEqual</code>; rejects <code>trusted</code> for <code>contributor</code>/<code>viewer</code> roles</td>
+<td>HTTP <code>401</code> / <code>403</code> / <code>400</code>, audited</td>
+</tr>
+<tr>
+<td>Redeem one-time token (<code>POST /auth/exchange</code>)</td>
+<td>JSON body <code>token</code> (never argv or query string)</td>
+<td>Constant-time SHA-256 lookup, TTL check, atomic <code>used = true</code> before session issue</td>
+<td>HTTP <code>401</code> (<code>OTT_INVALID</code> / <code>OTT_EXPIRED</code>) or <code>409</code> (<code>OTT_ALREADY_USED</code>), audited</td>
+</tr>
+<tr>
+<td>Invoke privileged MCP tools (<code>profile_attach</code>, <code>plugin_load</code>, <code>plugin_unload</code>, <code>plugin_reload</code>, <code>quit</code>)</td>
+<td>HTTP <code>Authorization</code> + JSON-RPC <code>method</code> / <code>params.name</code></td>
+<td><code>checkUntrustedMcpGate</code> blocks <code>trust === &quot;untrusted&quot;</code> before incur/Chromium</td>
+<td>HTTP <code>403</code> with JSON-RPC <code>-32003</code></td>
+</tr>
+<tr>
+<td>Write to shared Smithers Cloud object store (<code>https://build.smithers.sh</code>)</td>
+<td>GitHub event + <code>SMITHERS_CACHE_WRITE_TOKEN</code></td>
+<td>Exposed strictly on <code>push</code> to <code>main</code> or maintainer <code>workflow_dispatch</code>; never on <code>pull_request</code></td>
+<td>Read-only cache fallback on untrusted PRs</td>
+</tr>
+<tr>
+<td>Modify <code>protectedPaths</code> (<code>.github</code>, <code>.smithers</code>, <code>.agents</code>, <code>chromium/patches</code>, <code>native</code>)</td>
+<td>PR diff / Smithers Change</td>
+<td><code>S.Github.Policy</code> flags protected paths and restricts <code>todo</code>/merge actions to <code>maintainers: [&quot;roninjin10&quot;]</code></td>
+<td>Human maintainer approval required</td>
+</tr>
+<tr>
+<td>Publish npm package or deploy docs (<code>dangerouslyusebrowser.smithers.sh</code>)</td>
+<td>Verified <code>main</code> commit merged by human maintainer</td>
+<td><code>release.yml</code> runs full <code>smthrs ci //...</code>, <code>npm test</code>, <code>uphill --require-targets</code>, and tarball rehearsal</td>
+<td>Pipeline aborts on any non-zero exit</td>
+</tr>
+</tbody></table></div>
+<h2>Connecting agents to Smithers Cloud MCP</h2>
+<p><code>.mcp.json</code> configures <code>smithers-cloud</code> at <code>https://smithers.sh/api/mcp</code> so every agent working on Dub interacts directly with Smithers Cloud to manage artifacts, TODOs, issues, PRs, stacks of changesets, flows, and wiki pages. Person-only actions (merging, final triage, committing TODOs, secrets) remain host-enforced for human maintainers.</p>
+<h2>Related pages</h2>
+<ul>
+<li><a href="#page-start-here" data-wiki-link="start-here">start-here</a></li>
+<li><a href="#page-factory-and-trust" data-wiki-link="factory-and-trust">factory-and-trust</a></li>
+</ul></div>
+      <div class="wiki-inputs">
+        <h3>Pinned Source Inputs</h3>
+        <div class="wiki-chip-row">
+          <code class="wiki-chip">src/auth.ts</code><code class="wiki-chip">src/http.ts</code><code class="wiki-chip">src/cli.ts</code><code class="wiki-chip">scripts/mint-sandbox-auth.mjs</code><code class="wiki-chip">.mcp.json</code>
+        </div>
+      </div>
+    </article>
+
+    <article class="wiki-article" id="page-factory-and-trust" data-page-id="factory-and-trust" data-search="smithers cloud factory, object store, and trust model document incremental smthrs targets, build.smithers.sh cache isolation, uphill lighthouse backpressure, and automated releases. .smithers/workspace.ts .smithers/factory.ts .smithers/home.json package.ts .agents/uphill/uphill.yaml">
+      <div class="wiki-article-meta">
+        <span class="wiki-pill">Source-cited</span>
+        <code>.smithers/wiki/pages/factory-and-trust.md</code>
+        <a class="wiki-raw-link" href="docs/factory-and-trust.md">Raw Markdown</a>
+      </div>
+      <div class="wiki-content"><h1>Smithers Cloud factory, object store, and trust model</h1>
+<p>Dub is built publicly as a Smithers Cloud coding factory at <a href="https://smithers.sh/smithersai/dangerouslyusebrowser" target="_blank" rel="noopener">smithers.sh/smithersai/dangerouslyusebrowser</a>, mirroring cleanly to <a href="https://github.com/smithersai/dangerouslyusebrowser" target="_blank" rel="noopener">github.com/smithersai/dangerouslyusebrowser</a>.</p>
+<h2>Shared Smithers Cloud object store (<code>.smithers/WORKSPACE.ts</code>)</h2>
+<p>Every build and test target declared in <code>PACKAGE.ts</code> and <code>.smithers/PACKAGE.ts</code> hashes its exact source closure and declared host binaries (<code>node</code>, <code>npm</code>, <code>bun</code>, <code>c++</code>, <code>sh</code>). Results cache locally in <code>.smithers/cache</code> and sync through the shared Smithers Cloud object store at <code>https://build.smithers.sh</code> using separated credentials:</p>
+<ul>
+<li><code>SMITHERS_CACHE_READ_TOKEN</code>: Read-only cache lookup (safe to expose to untrusted runs).</li>
+<li><code>SMITHERS_CACHE_WRITE_TOKEN</code>: Cache publication (restricted strictly to trusted maintainer and <code>main</code>-branch controlled sandboxes).</li>
+</ul>
+<h2>Trusted vs untrusted execution</h2>
+<p>We actively welcome and encourage non-maintainers to run tests, Uphill audits, and flows on their changes, because most contributors act in good faith. Security holds by construction rather than by blocking contributors:</p>
+<div class="wiki-table-wrap"><table class="wiki-table"><thead><tr>
+<th>Capability</th>
+<th>Trusted (Maintainer / Controlled Sandbox)</th>
+<th>Untrusted (Non-Maintainer / Fork PR)</th>
+</tr></thead><tbody>
+<tr>
+<td>Run unit, fuzz, MCP, and Uphill checks</td>
+<td>Allowed</td>
+<td>Allowed and encouraged</td>
+</tr>
+<tr>
+<td>Read from <code>build.smithers.sh</code> cache</td>
+<td>Allowed</td>
+<td>Allowed (read-only)</td>
+</tr>
+<tr>
+<td>Write to <code>build.smithers.sh</code> object store</td>
+<td>Allowed</td>
+<td>Blocked (no write token)</td>
+</tr>
+<tr>
+<td>Modify <code>protectedPaths</code> (<code>.github</code>, <code>.smithers</code>, <code>chromium/patches</code>, <code>native</code>)</td>
+<td>Allowed with review</td>
+<td>Flagged and gated for maintainer</td>
+</tr>
+<tr>
+<td>Skip quality gates or merge to <code>main</code></td>
+<td>Human maintainer only</td>
+<td>Blocked</td>
+</tr>
+<tr>
+<td>Trigger npm release and docs publish</td>
+<td>Automatic on merge to <code>main</code></td>
+<td>Blocked</td>
+</tr>
+</tbody></table></div>
+<h2>Lighthouse-style backpressure (<code>.agents/uphill/</code>)</h2>
+<p>Instead of opaque CI logs, Dub runs Uphill across five scored categories (<code>bridge-safety</code>, <code>typescript-quality</code>, <code>mcp-security</code>, <code>testing-and-fuzz</code>, <code>docs-and-footprint</code>), rendering a Google Lighthouse-style visual audit report (<code>site/audit.html</code> and <code>.uphill/report.html</code>) with 0-100 circular gauges, missed targets, baseline diffs, and opportunities ranked by score impact.</p>
+<h2>Personalized Factory UI (<code>.smithers/home.json</code>)</h2>
+<p>The Smithers Cloud homepage adapts automatically to who opens the repository:</p>
+<ul>
+<li><strong>Maintainer (<code>roninjin10</code>)</strong>: Opens on the <code>Today</code> cockpit (<code>branch.new</code> hotkey <code>b</code>, live <code>issues</code>, live <code>stack</code> of changesets, live <code>runs</code>, and maintainer flow controls).</li>
+<li><strong>Contributor</strong>: Opens on the <code>Contribute</code> workbench (setup commands, untrusted-to-trusted workflow cards, links to Issues/PRs/Audit/Wiki, and codebase Q&amp;A).</li>
+<li><strong>Viewer (<code>everyone</code>)</strong>: Opens on the open-source front door (Hero with install command, quickstart code, verified stats, capability cards, releases, and live audit links).</li>
+</ul>
+<h2>Automatic release and docs publishing</h2>
+<p>Merging from Smithers Cloud to GitHub <code>main</code> automatically runs <code>.github/workflows/release.yml</code>, which:</p>
+<ul>
+<li>Checks whether <code>package.json</code> version moved ahead of npm or whether docs, wiki, site, or audit files changed.</li>
+<li>Runs full incremental CI (<code>smthrs ci //...</code>) and Lighthouse backpressure (<code>uphill --compact</code>).</li>
+<li>Rehearses and publishes <code>dangerouslyusebrowser</code> to npm + creates a verified GitHub Release when the version advances.</li>
+<li>Rebuilds and deploys <code>dangerouslyusebrowser.smithers.sh</code> (landing page, personalized factory UI, live Lighthouse audit report, public wiki, Mythical History, and <code>llms.txt</code>).</li>
+</ul>
+<h2>Related pages</h2>
+<ul>
+<li><a href="#page-start-here" data-wiki-link="start-here">start-here</a></li>
+<li><a href="#page-cloud-mcp-and-auth" data-wiki-link="cloud-mcp-and-auth">cloud-mcp-and-auth</a></li>
+</ul></div>
+      <div class="wiki-inputs">
+        <h3>Pinned Source Inputs</h3>
+        <div class="wiki-chip-row">
+          <code class="wiki-chip">.smithers/WORKSPACE.ts</code><code class="wiki-chip">.smithers/FACTORY.ts</code><code class="wiki-chip">.smithers/home.json</code><code class="wiki-chip">PACKAGE.ts</code><code class="wiki-chip">.agents/uphill/uphill.yaml</code>
+        </div>
+      </div>
+    </article>
+
+    <article class="wiki-article" id="page-mythical-history" data-page-id="mythical-history" data-search="mythical history chronological source-grounded history of dub from verified jj commits and launch evidence. chromium/revision.json docs/evidence/2026-11-23/readme.md">
+      <div class="wiki-article-meta">
+        <span class="wiki-pill">Source-cited</span>
+        <code>.smithers/wiki/mythical-history.md</code>
+        <a class="wiki-raw-link" href="docs/mythical-history.md">Raw Markdown</a>
+      </div>
+      <div class="wiki-content"><h1>Mythical History of Dub</h1>
+<p>A source-grounded chronicle of <strong>Dub (DangerouslyUseBrowser)</strong> built on pinned Chromium <code>157.0.8082.0</code> (<code>0e331aaf43bf</code>). Every epoch below links directly to committed source files, patches, and dated verification receipts.</p>
+<h2>Epochs</h2>
+<h3>Epoch I: The Seam Census and the C++20 Bridge (2026-09-30)</h3>
+<blockquote class="wiki-quote"><strong>Stage:</strong> Foundation</blockquote>
+<p>Dub began with a hard refusal: no stock-CDP wrapper, no Playwright shim, no Electron shell. The first commits carved a minimal C ABI and N-API v8 bridge over AF_UNIX with whole-call deadlines, incur HTTP MCP commands, and a source-backed seam census across 32 pinned Chromium 157 paths.</p>
+<p><strong>Verified commits:</strong></p>
+<ul>
+<li><code>b138b7df</code> (2026-11-24) feat(release): add dub install auto-downloader, prebuilt N-API binaries, fuzz tests, demo video, and docs site</li>
+<li><code>2566fee2</code> (2026-09-30) docs: specify first Chromium build integration and session lifecycle</li>
+<li><code>1d72070b</code> (2026-09-30) docs: commit source-backed seam census, build plan and full acceptance gates</li>
+<li><code>d143978d</code> (2026-09-30) draft: checkpoint Chromium native dispatcher and local IPC listener</li>
+</ul>
+<p><strong>Key artifacts:</strong> <code>docs/spec.md</code>, <code>docs/seams.md</code>, <code>docs/decisions.md</code>, <code>docs/first-build.md</code>, <code>native/dub.cc</code>, <code>native/addon.cc</code></p>
+<h3>Epoch II: First Light: Compiled Chromium 157 Fork (Stage A) (2026-11-23)</h3>
+<blockquote class="wiki-quote"><strong>Stage:</strong> Compiled Fork</blockquote>
+<p>Pinned Chromium 157.0.8082.0 (0e331aaf43bf) compiled cleanly on Linux x86-64 with the Dub native dispatcher wired directly into chrome/browser:core. A real MCP client crossed incur, TypeScript, N-API, and AF_UNIX to dispatch a native trusted click inside the compiled fork.</p>
+<p><strong>Verified commits:</strong></p>
+<ul>
+<li><code>429abfd3</code> (2026-11-23) feat(stage-a): compile Dub Chromium 157 fork and pass real-browser MCP + actor click suite</li>
+</ul>
+<p><strong>Key artifacts:</strong> <code>chromium/revision.json</code>, <code>chromium/patches/0001-stage-a-dub-core.patch</code>, <code>tests/browser/stage-a.test.mjs</code></p>
+<h3>Epoch III: NetworkService Mastery and Native WebMCP (Milestones 1 and 2) (2026-11-23)</h3>
+<blockquote class="wiki-quote"><strong>Stage:</strong> DEMO-01 &amp; DEMO-03</blockquote>
+<p>Dub moved below navigation-only hooks directly into Chromium NetworkService, intercepting tabs, dedicated/shared/service workers, CacheStorage, and HTTP disk cache. Alongside it landed promise-aware evaluation, persistent profile ownership, native actor tools, and live WebMCP page-tool discovery.</p>
+<p><strong>Verified commits:</strong></p>
+<ul>
+<li><code>16d982f0</code> (2026-11-23) Implement Milestone 1 (eval/screenshot/actor/WebMCP/profile) and Milestone 2 (NetworkService interception)</li>
+</ul>
+<p><strong>Key artifacts:</strong> <code>chromium/patches/0002-milestone-1-renderer-webmcp-upload.patch</code>, <code>chromium/patches/0003-milestone-2-network-interception.patch</code>, <code>tests/browser/milestone-1-act.test.mjs</code>, <code>tests/browser/milestone-2-network.test.mjs</code></p>
+<h3>Epoch IV: Bending Time Without Breaking Sibling Tabs (Milestone 3) (2026-11-23)</h3>
+<blockquote class="wiki-quote"><strong>Stage:</strong> DEMO-02</blockquote>
+<p>Rejecting process-wide virtual time, Dub patched V8 and Blink with per-tab isolated clock domains. One tab froze at 2026-01-01, stepped exact animation frames, and jumped 31 days into trial expiry while a sibling tab in the exact same renderer process stayed on wall clock.</p>
+<p><strong>Verified commits:</strong></p>
+<ul>
+<li><code>4d26d0c7</code> (2026-11-23) feat(milestone-3): implement isolated per-tab engine clock across V8 and Blink</li>
+</ul>
+<p><strong>Key artifacts:</strong> <code>chromium/patches/0004-milestone-3-per-tab-clock.patch</code>, <code>tests/browser/milestone-3-clock.test.mjs</code>, <code>docs/evidence/2026-11-23/README.md</code></p>
+<h3>Epoch V: Launch Evidence, Prebuilds, Fuzzing, and Docs Site (2026-11-24)</h3>
+<blockquote class="wiki-quote"><strong>Stage:</strong> v0.1.0-alpha.1</blockquote>
+<p>All three reproducible launch demos passed against the packaged 390 MiB Linux x86-64 bundle with SHA-256 checksums, fresh-install verification, prebuilt N-API binaries for macOS arm64 and Linux x64, 4 fuzz suites, and the public site at dangerouslyusebrowser.smithers.sh.</p>
+<p><strong>Verified commits:</strong></p>
+<ul>
+<li><code>b138b7df</code> (2026-11-24) feat(release): add dub install auto-downloader, prebuilt N-API binaries, fuzz tests, demo video, and docs site</li>
+<li><code>06d7c3cc</code> (2026-11-23) feat(launch): add reproducible demos, launch evidence bundle, and verified README</li>
+<li><code>2030aa8b</code> (2026-09-30) spec: record Dub fork contract, native architecture and release gates</li>
+</ul>
+<p><strong>Key artifacts:</strong> <code>docs/evidence/2026-11-23/README.md</code>, <code>docs/evidence/2026-11-23/demos-receipt.json</code>, <code>demos/run-demos.mjs</code>, <code>tests/fuzz.test.mjs</code></p>
+<h3>Epoch VI: QuickJS Code Mode, Jev, Triggers, and Live TS Plugins (Milestone 4) (2026-11-26)</h3>
+<blockquote class="wiki-quote"><strong>Stage:</strong> Programmable Runtime</blockquote>
+<p>Chromium gained a live AF_UNIX push event stream (dub_events) feeding a full Smithers-powered runtime: persistent QuickJS REPL realms, typed Jev evaluators, BYO agent adapters, reactive triggers, and hot-reloadable TypeScript plugins.</p>
+<p><strong>Verified commits:</strong></p>
+<ul>
+<li><code>d84fad3e</code> (2026-11-26) feat(milestone-4): add Chromium push events, Smithers QuickJS code mode, Jev, BYO agent triggers, and TS plugins</li>
+</ul>
+<p><strong>Key artifacts:</strong> <code>chromium/patches/0005-milestone-4-control-events-plugins.patch</code>, <code>src/smithers-runtime.ts</code>, <code>src/plugins.ts</code>, <code>src/triggers.ts</code>, <code>tests/plugins-smithers.test.mjs</code></p>
+<h3>Epoch VII: The Smithers Cloud Factory Switchover (2026-11-26)</h3>
+<blockquote class="wiki-quote"><strong>Stage:</strong> Public Factory</blockquote>
+<p>Dub switched permanently onto Smithers Cloud: incremental smthrs targets backed by the shared build.smithers.sh object store, single-use one-time sandbox auth tokens, strict untrusted-vs-trusted cache isolation, Lighthouse-style Uphill backpressure, personalized Maintainer/Contributor/Viewer views, Obsidian wiki, and automated release and docs pipelines.</p>
+<p><strong>Verified commits:</strong></p>
+<ul>
+<li><code>d84fad3e</code> (2026-11-26) feat(milestone-4): add Chromium push events, Smithers QuickJS code mode, Jev, BYO agent triggers, and TS plugins</li>
+</ul>
+<p><strong>Key artifacts:</strong> <code>.smithers/WORKSPACE.ts</code>, <code>.smithers/FACTORY.ts</code>, <code>.smithers/home.json</code>, <code>.agents/uphill/uphill.yaml</code>, <code>src/auth.ts</code>, <code>site/audit.html</code></p>
+<h2>Verified Commit Ledger (from <code>jj log</code>)</h2>
+<div class="wiki-table-wrap"><table class="wiki-table"><thead><tr>
+<th>Commit</th>
+<th>Date</th>
+<th>Description</th>
+</tr></thead><tbody>
+<tr>
+<td><code>d84fad3e</code></td>
+<td>2026-11-26</td>
+<td>feat(milestone-4): add Chromium push events, Smithers QuickJS code mode, Jev, BYO agent triggers, and TS plugins</td>
+</tr>
+<tr>
+<td><code>b138b7df</code></td>
+<td>2026-11-24</td>
+<td>feat(release): add dub install auto-downloader, prebuilt N-API binaries, fuzz tests, demo video, and docs site</td>
+</tr>
+<tr>
+<td><code>06d7c3cc</code></td>
+<td>2026-11-23</td>
+<td>feat(launch): add reproducible demos, launch evidence bundle, and verified README</td>
+</tr>
+<tr>
+<td><code>4d26d0c7</code></td>
+<td>2026-11-23</td>
+<td>feat(milestone-3): implement isolated per-tab engine clock across V8 and Blink</td>
+</tr>
+<tr>
+<td><code>16d982f0</code></td>
+<td>2026-11-23</td>
+<td>Implement Milestone 1 (eval/screenshot/actor/WebMCP/profile) and Milestone 2 (NetworkService interception)</td>
+</tr>
+<tr>
+<td><code>429abfd3</code></td>
+<td>2026-11-23</td>
+<td>feat(stage-a): compile Dub Chromium 157 fork and pass real-browser MCP + actor click suite</td>
+</tr>
+<tr>
+<td><code>2566fee2</code></td>
+<td>2026-09-30</td>
+<td>docs: specify first Chromium build integration and session lifecycle</td>
+</tr>
+<tr>
+<td><code>1d72070b</code></td>
+<td>2026-09-30</td>
+<td>docs: commit source-backed seam census, build plan and full acceptance gates</td>
+</tr>
+<tr>
+<td><code>d143978d</code></td>
+<td>2026-09-30</td>
+<td>draft: checkpoint Chromium native dispatcher and local IPC listener</td>
+</tr>
+<tr>
+<td><code>67c91e7f</code></td>
+<td>2026-09-30</td>
+<td>feat: add typed SDK, incur commands, HTTP MCP server and browser lifecycle</td>
+</tr>
+<tr>
+<td><code>79c48d29</code></td>
+<td>2026-09-30</td>
+<td>test: verify compiled N-API framing, concurrency, deadlines and errors</td>
+</tr>
+<tr>
+<td><code>2030aa8b</code></td>
+<td>2026-09-30</td>
+<td>spec: record Dub fork contract, native architecture and release gates</td>
+</tr>
+</tbody></table></div></div>
+      <div class="wiki-inputs">
+        <h3>Pinned Source Inputs</h3>
+        <div class="wiki-chip-row">
+          <code class="wiki-chip">chromium/revision.json</code><code class="wiki-chip">docs/evidence/2026-11-23/README.md</code>
+        </div>
+      </div>
+    </article>
+        </section>
+      </div>
+    </main>
+
+    <footer>
+      <span>Generated from <code>.smithers/wiki/</code> &middot; Read by <code>smithers.sh</code> via <code>llms.txt</code></span>
+      <span><a href="https://smithers.sh/smithersai/dangerouslyusebrowser">smithers.sh/smithersai/dangerouslyusebrowser</a></span>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      const buttons = Array.from(document.querySelectorAll('.wiki-nav-btn'));
+      const articles = Array.from(document.querySelectorAll('.wiki-article'));
+      const search = document.getElementById('wiki-search');
+
+      function selectPage(id, pushHash) {
+        if (!articles.some(a => a.dataset.pageId === id)) return;
+        buttons.forEach(b => b.classList.toggle('active', b.dataset.page === id));
+        articles.forEach(a => a.classList.toggle('active', a.dataset.pageId === id));
+        if (pushHash) history.replaceState(null, '', '#page-' + id);
+      }
+
+      buttons.forEach(btn => btn.addEventListener('click', () => selectPage(btn.dataset.page, true)));
+      document.addEventListener('click', e => {
+        const link = e.target.closest('[data-wiki-link]');
+        if (!link) return;
+        e.preventDefault();
+        selectPage(link.getAttribute('data-wiki-link'), true);
+      });
+
+      if (search) {
+        search.addEventListener('input', () => {
+          const q = search.value.trim().toLowerCase();
+          buttons.forEach(btn => {
+            const art = document.getElementById('page-' + btn.dataset.page);
+            const hay = (btn.textContent + ' ' + (art ? art.dataset.search : '')).toLowerCase();
+            btn.style.display = !q || hay.includes(q) ? '' : 'none';
+          });
+        });
+      }
+
+      const initial = location.hash.replace(/^#page-/, '');
+      if (initial) selectPage(initial, false);
+    })();
+  </script>
+</body>
+</html>

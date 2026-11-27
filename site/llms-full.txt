@@ -1,0 +1,725 @@
+# Dub (DangerouslyUseBrowser) - Full Technical Corpus
+
+
+---
+<!-- .smithers/wiki/pages/start-here.md -->
+
+# Start here
+
+Dub (**DangerouslyUseBrowser**) is a real Chromium `157.0.8082.0` fork that exposes browser internals directly to coding agents through native C++20 N-API bindings and an [incur](https://github.com/wevm/incur) MCP server. It is not Playwright, not a stock-CDP wrapper, and not Electron.
+
+## Why a real Chromium fork
+
+Stock automation protocols sit outside the browser engine's privileged seams. Dub patches Chromium directly at the C++ browser, renderer, V8, Blink, and NetworkService boundaries so agents can:
+
+- Rewrite, block, redirect, and decode-patch network traffic across tabs, dedicated/shared/service workers, CacheStorage, and HTTP cache (`DEMO-01`).
+- Freeze, advance by 31 days, and frame-step a single tab's V8 + Blink clock while leaving sibling tabs in the same renderer on real wall time (`DEMO-02`).
+- Attach to a persistent profile, dispatch native Chromium actor input (`isTrusted: true`), and call live WebMCP page tools (`DEMO-03`).
+- Run persistent QuickJS TypeScript code-mode cells, typed Jev evaluators, reactive push-stream triggers, and hot-reloadable TypeScript plugins (`Milestone 4`).
+
+## Repository map
+
+| Path | Owning layer |
+| --- | --- |
+| `native/` | C++20 C ABI and N-API v8 bridge (`dub.h`, `dub.cc`, `addon.cc`) |
+| `chromium/` | Pinned Chromium `157.0.8082.0` (`revision.json`), 21 overlay files, 5 unified patches |
+| `src/` | TypeScript SDK, incur CLI/MCP commands, `TokenAuthority`, HTTP boundary, and `DubRuntime` |
+| `tests/` | Unit, fuzz, auth, plugin, and compiled-fork `tests/browser/` acceptance suites |
+| `.smithers/` | Smithers Cloud factory (`FACTORY.ts`, `WORKSPACE.ts`, `home.json`, flows, and this wiki) |
+| `.agents/uphill/` | Lighthouse-style backpressure audit metrics and baselines |
+| `site/` | Public docs, personalized factory UI, live audit report, wiki, and `llms.txt` |
+
+## Evidence rule
+
+Dub separates bridge-fixture tests from compiled-fork browser proofs. Transport fixtures validate N-API framing, deadlines, MCP schemas, auth, and QuickJS runtimes, never Chromium behavior. Compiled-fork browser behavior is verified by `DUB_BROWSER=/path/to/chrome npm run test:browser` and archived under `docs/evidence/2026-11-23/README.md`.
+
+## Related pages
+
+- [[native-bridge]]
+- [[chromium-seams]]
+- [[cloud-mcp-and-auth]]
+- [[factory-and-trust]]
+
+
+---
+<!-- .smithers/wiki/pages/native-bridge.md -->
+
+# C++20 N-API bridge and IPC protocol
+
+Dub keeps Chromium out-of-process so the browser's multiprocess sandbox, UI loop, and V8 isolates remain isolated from Node.js. Communication crosses a small C++20 N-API v8 addon (`native/addon.cc`, `native/dub.cc`, `native/dub.h`) over a private local `AF_UNIX` socket.
+
+## Protocol v1 wire format
+
+```
++---------------------------+----------------------------------------+
+| uint32 big-endian length  | UTF-8 JSON payload (1 byte to 16 MiB)  |
++---------------------------+----------------------------------------+
+```
+
+- **Request envelope**: `{"protocol":1,"id":"<uuid>","method":"<name>","params":{...},"timeoutMs":30000}`
+- **Response envelope**: echoes `id` and carries either `result` or `{"error":{"code":"...","message":"..."}}`.
+- **Whole-call deadlines**: `dub_call` enforces an absolute monotonic deadline. A stalled browser or slow one-byte trickle cannot reset the timer.
+- **No silent retries**: Timeout or disconnect never implies rollback and never retries side-effecting commands automatically.
+
+## Push event stream (`subscribe`)
+
+Milestone 4 added `NativeBridge.subscribe()` backed by persistent non-blocking `AF_UNIX` streaming in `native/addon.cc` and `native/dub.cc`. Chromium pushes live network callbacks, console entries, dialogs, navigations, downloads, and exposed page calls into Node without polling, powering `src/triggers.ts` and `src/plugins.ts`.
+
+## Compilation and safety invariants
+
+`scripts/build-native.mjs` compiles `native/addon.cc` and `native/dub.cc` with:
+
+```
+-std=c++20 -O2 -Wall -Wextra -Werror -fPIC -shared -DNAPI_VERSION=8
+```
+
+- Zero `abort()`, `exit()`, or `std::terminate()` calls are allowed in `native/` (enforced continuously by Uphill's `cpp-no-abort` gate).
+- Prebuilt binaries ship under `prebuilds/darwin-arm64/dub.node` and `prebuilds/linux-x64/dub.node`, and `scripts/install.mjs` compiles on demand when a matching prebuild is absent.
+- `tests/native.test.mjs` and `tests/fuzz.test.mjs` verify fragmented UTF-8 reads, parallel calls, whole-call deadlines, slow trickles, 120 malformed/truncated/oversized frames, and clean subscription teardown.
+
+## Related pages
+
+- [[start-here]]
+- [[chromium-seams]]
+- [[plugins-and-triggers]]
+
+
+---
+<!-- .smithers/wiki/pages/chromium-seams.md -->
+
+# Chromium 157 fork and overlay seams
+
+Upstream Chromium source stays outside this repository. Dub pins an exact revision in `chromium/revision.json` and layers 21 overlay files plus 5 unified patches via `scripts/chromium.mjs`.
+
+## Pinned baseline
+
+- **Version**: `157.0.8082.0`
+- **Commit**: `0e331aaf43bf5e1ffe16e65140de2d925c18f0a2`
+- **Protocol**: `1`
+
+## Patch series
+
+| Patch | Milestone | Scope |
+| --- | --- | --- |
+| `0001-stage-a-dub-core.patch` | Stage A | GN integration in `chrome/browser:core`, `PostBrowserStart` socket startup, clean shutdown before profile destruction |
+| `0002-milestone-1-renderer-webmcp-upload.patch` | Milestone 1 | Renderer frame observer (`dub_frame.mojom`), promise-aware eval, native actor upload, live WebMCP tool registry |
+| `0003-milestone-2-network-interception.patch` | Milestone 2 | NetworkService-level interception (`services/network/dub/`) across tabs, workers, and caches |
+| `0004-milestone-3-per-tab-clock.patch` | Milestone 3 | Per-tab isolated V8 and Blink engine clock with frame stepping and monotonic resume |
+| `0005-milestone-4-control-events-plugins.patch` | Milestone 4 | Push event stream (`dub_events`), extended control dispatch (`dub_dispatch_extra`), browser state hooks |
+
+## Lifecycle and profile ownership
+
+Following `docs/first-build.md`:
+
+- `dub serve` starts the native socket at the end of `PostBrowserStart` and invalidates pending callbacks before desktop `PostMainMessageLoopRun` teardown.
+- A serving session retains its selected profile when the last browser window closes, preventing accidental session loss.
+- The runtime capability handshake (`browser.info`) advertises implemented methods and tools so `createCommands()` only exposes capabilities the running binary supports.
+- `scripts/verify-overlay.mjs` runs on every `smthrs ci //:overlay-check` and Uphill audit to validate `revision.json`, unified patch headers, non-empty overlay files, and zero private infrastructure leaks.
+
+## Related pages
+
+- [[start-here]]
+- [[network-and-clock]]
+- [[actor-and-webmcp]]
+
+
+---
+<!-- .smithers/wiki/pages/network-and-clock.md -->
+
+# NetworkService rewrite and per-tab engine clock
+
+Dub's first two flagship proofs attack the two hardest limits of stock browser automation: universal network control and engine-coherent time travel.
+
+## DEMO-01: NetworkService-level interception
+
+Navigation-only hooks miss `fetch`, dedicated workers, shared workers, service workers, and cache hits. Dub installs `DubNetworkInterceptor` directly inside Chromium's NetworkService (`chromium/overlay/services/network/dub/dub_network_interceptor.cc`) synchronized over Mojo from the browser process (`chromium/overlay/chrome/browser/dub/dub_network.cc`).
+
+Verified capabilities (`tests/browser/milestone-2-network.test.mjs`):
+- Live rule add, list, remove, and precedence evaluation without restarting tabs.
+- Mock responses (status, headers, body/JSON), request blocking, redirects, header mutation, and decoded-body search/replace patching (no double-patching across gzip/chunked streams).
+- Coverage across top-level navigation, `fetch`, dedicated/shared/service workers, CacheStorage, and HTTP disk cache.
+- Bounded `net log --follow` stream with explicit gap reporting when entries rotate.
+
+## DEMO-02: Per-tab isolated V8 and Blink clock
+
+Process-wide virtual time perturbs Chromium internals and corrupts sibling tabs sharing a renderer process. Dub patches V8 and Blink (`0004-milestone-3-per-tab-clock.patch`) with page-scoped clock domains while keeping browser IPC deadlines and network housekeeping on real monotonic time.
+
+Verified capabilities (`tests/browser/milestone-3-clock.test.mjs`):
+- Freeze at an arbitrary ISO epoch (`clock.freeze`) and synchronize `Date.now()`, `new Date()`, `performance.now()`, `setTimeout`, `setInterval`, `requestAnimationFrame`, and CSS animations.
+- Advance 31 days (`clock.advance --by 31d`) with bounded interval fire caps so infinite page timers cannot hang the browser.
+- Step exact animation frames (`clock.stepFrames`) and verify committed compositor pixel diffs via screenshot.
+- Same-renderer isolation: two same-origin tabs verified to share one renderer PID stay independent (tab A freezes/jumps while tab B stays on wall clock).
+- DedicatedWorker inheritance and monotonic resume (`clock.resume`).
+
+## Related pages
+
+- [[chromium-seams]]
+- [[actor-and-webmcp]]
+- [[plugins-and-triggers]]
+
+
+---
+<!-- .smithers/wiki/pages/actor-and-webmcp.md -->
+
+# Persistent profiles, native actor tools, and WebMCP
+
+DEMO-03 gives agents direct access to real authenticated browser sessions through persistent Chromium profiles, native trusted input, and page-registered WebMCP tools.
+
+## Persistent profile ownership (`src/launch.ts`)
+
+- By default, `dub serve` creates and owns an isolated persistent profile directory so cookies, IndexedDB, and session storage survive browser restarts without touching the user's daily browser.
+- Explicit `--profile` or `profile attach` can select an existing compatible Chromium profile. Dub respects Chromium's ordinary profile lock and never extracts, copies, or inspects credential databases during development.
+- Closing the last window does not terminate a serving session; the selected profile remains pinned until explicit shutdown (`SIGINT`/`SIGTERM`).
+
+## Native Chromium actor tools
+
+Instead of synthesizing untrusted DOM clicks, Dub invokes Chromium's native actor delegates (`actor.click`, `actor.type`, `actor.select`, `actor.scroll`, `actor.upload_file`, and navigation actions) from the browser process:
+- Dispatched events arrive in the page with `isTrusted: true`.
+- Text and selector targeting detects stale targets and returns Chromium's native failure codes.
+- File upload reads only the explicitly named local fixture path.
+
+## Live WebMCP page tools (`dub_frame.mojom`)
+
+When a web application registers tools through WebMCP (`navigator.modelContext`), Dub's renderer observer (`chromium/overlay/chrome/renderer/dub/dub_render_frame_observer.cc`) tracks tools dynamically across frames and navigations:
+- `tools list` returns current tool names, JSON input schemas, and frame IDs.
+- `tools call` invokes the registered page handler and preserves structured return values, rejections, and cancellations.
+- Cross-document navigation invalidates stale registrations so pending invocations never wedge.
+
+## Related pages
+
+- [[chromium-seams]]
+- [[network-and-clock]]
+- [[cloud-mcp-and-auth]]
+
+
+---
+<!-- .smithers/wiki/pages/plugins-and-triggers.md -->
+
+# QuickJS code mode, Jev, triggers, and TypeScript plugins
+
+Milestone 4 turns Dub into a programmable browser runtime built directly on Smithers primitives (`@smthrs/harness`, `@smthrs/model`, and `effect`). All five runtime subsystems are composed inside `DubRuntime` (`src/runtime.ts`).
+
+## Smithers QuickJS code mode (`src/smithers-runtime.ts`)
+
+`SmithersCodeRuntime` executes TypeScript and JavaScript cells inside persistent, isolated QuickJS REPL realms (`@smthrs/harness/Sandbox`):
+- Cells call Dub browser operations through typed `ctx.call(...)` flows (`tabs.list`, `page.evaluate`, `net.mock`, `clock.advance`, `jev.ask`, `agent.turn`, and more) across primitive JSON boundaries.
+- Every cell is bounded by a wall-clock `timeoutMs` and a `maxCalls` budget, preventing runaway scripts from stalling the host.
+- Realms retain lexical bindings across frames (`realmId`) and tear down cleanly on `runtime.close()`.
+
+## Typed Jev evaluators (`src/jev.ts`)
+
+`JevClient` wraps `@smthrs/model/Evaluator` so every enumerable browser decision (boolean, choice, or numeric score) runs with typed failure semantics at the seam instead of silent LLM fallback:
+- Supports Vercel AI Gateway in production and deterministic scripted evaluators in tests (`Evaluator.layerScripted`).
+- Each question instruction is prefixed with its ID to match Smithers StandardFlows conventions.
+
+## Reactive triggers and BYO agent bridge (`src/triggers.ts`, `src/agent-bridge.ts`)
+
+`TriggerEngine` subscribes to Chromium's live push stream (`net.request`, `net.response`, `page.dialog`, `page.navigate`, `page.console`, `page.error`, `download`, `ws.message`, `page.exposed`) and executes three reactive modes:
+1. `code`: evaluates a TypeScript cell in QuickJS with `event` injected.
+2. `jev`: queries `JevClient` and routes deterministically to a decision, a QuickJS cell, or agent escalation.
+3. `agent`: hands off a structured turn to any BYO agent adapter (CLI such as `claude -p`, OpenAI, Anthropic, or webhook HTTP endpoint) with Dub's `/mcp` endpoint attached.
+
+## Hot-reloadable TypeScript plugins (`src/plugins.ts`)
+
+`PluginManager` loads `.ts` or `.js` plugins (`definePlugin`), transpiles TypeScript via Sucrase, supports `--watch` hot-reload, registers custom MCP tools, synthetic WebMCP page tools, command middleware, and network callbacks, and tears down every resource atomically on unload or reload.
+
+## Related pages
+
+- [[native-bridge]]
+- [[network-and-clock]]
+- [[cloud-mcp-and-auth]]
+
+
+---
+<!-- .smithers/wiki/pages/cloud-mcp-and-auth.md -->
+
+# Cloud MCP server and one-time sandbox auth
+
+Dub dogfoods Smithers Cloud's Bring-Your-Own-Agent (BYOA) MCP architecture in both directions: agents developing Dub connect to **Smithers Cloud MCP** (`https://smithers.sh/api/mcp`), and agents driving a browser connect to **Dub's authenticated HTTP MCP server** (`dub serve /mcp`) using short-lived, single-use sandbox tokens.
+
+## One-time sandbox authentication (`src/auth.ts`, `src/http.ts`)
+
+```
+Maintainer / Controller                      Sandbox / BYO Agent
+        |                                             |
+        |-- POST /auth/one-time-tokens -------------> | (receives dub_ott_... ONCE)
+        |                                             |
+        |                                POST /auth/exchange {"token":"dub_ott_..."}
+        |                                             |---> atomic single-use mark
+        |                                             |<--- dub_ses_... (scoped TTL)
+        |                                             |
+        |                                POST /mcp (Authorization: Bearer dub_ses_...)
+        |                                             |---> verified X-Dub-Trust header
+```
+
+Security invariants verified by `tests/auth.test.mjs` and 200 randomized fuzz trials in `tests/fuzz.test.mjs`:
+- **Loopback default**: `dub serve` binds `127.0.0.1` by default and refuses non-loopback hosts without authentication.
+- **Host and Origin pinning**: Every HTTP request is checked against the allowed Host allowlist and same-origin policy, blocking DNS rebinding and cross-site requests.
+- **SHA-256 hashed storage + timing-safe comparison**: Raw `dub_ott_...` and `dub_ses_...` secrets are never stored in memory or logs. Only SHA-256 digests are retained and compared via `crypto.timingSafeEqual`.
+- **Atomic single-use redemption**: `redeemOneTimeToken()` marks the token used before emitting the session token. Any replay fails with HTTP `409` (`OTT_ALREADY_USED`).
+- **Untrusted scope attenuation**: `contributor` and `viewer` principals always carry `trust: "untrusted"` and are stripped of `cache:write`, `auth:mint`, `mcp:admin`, `plugin:manage`, and `profile:attach`.
+- **Sanitized audit ring buffer**: The last 128 auth events (`mint`, `redeem`, `replay_rejected`, `expired_rejected`, `revoke`) are queryable by trusted maintainers on `GET /auth/audit` with zero secret bytes logged.
+
+## Printing one-time tokens for sandboxes and agents
+
+Start Dub with an immediate single-use bootstrap token:
+
+```sh
+dub serve --port 7777 --print-one-time-token --sandbox-id ci-42
+```
+
+Or mint additional one-time tokens from a running authenticated server or Smithers gateway:
+
+```sh
+DUB_TOKEN=... node scripts/mint-sandbox-auth.mjs --principal agent:reviewer --role agent --ttlSeconds 120
+SMITHERS_TOKEN=... node scripts/mint-sandbox-auth.mjs --target smithers --ttlSeconds 120
+```
+
+## Root-input-tracing security table
+
+Every privileged operation in Dub and its Smithers Cloud factory traces back to its exact origin input and enforcement boundary:
+
+| Privileged step | Origin input | Boundary check | Failure behavior |
+| --- | --- | --- | --- |
+| Mint one-time sandbox token (`POST /auth/one-time-tokens`) | HTTP `Authorization` header + JSON body | Requires `trust === "trusted"` and `auth:mint` scope verified via SHA-256 + `timingSafeEqual`; rejects `trusted` for `contributor`/`viewer` roles | HTTP `401` / `403` / `400`, audited |
+| Redeem one-time token (`POST /auth/exchange`) | JSON body `token` (never argv or query string) | Constant-time SHA-256 lookup, TTL check, atomic `used = true` before session issue | HTTP `401` (`OTT_INVALID` / `OTT_EXPIRED`) or `409` (`OTT_ALREADY_USED`), audited |
+| Invoke privileged MCP tools (`profile_attach`, `plugin_load`, `plugin_unload`, `plugin_reload`, `quit`) | HTTP `Authorization` + JSON-RPC `method` / `params.name` | `checkUntrustedMcpGate` blocks `trust === "untrusted"` before incur/Chromium | HTTP `403` with JSON-RPC `-32003` |
+| Write to shared Smithers Cloud object store (`https://build.smithers.sh`) | GitHub event + `SMITHERS_CACHE_WRITE_TOKEN` | Exposed strictly on `push` to `main` or maintainer `workflow_dispatch`; never on `pull_request` | Read-only cache fallback on untrusted PRs |
+| Modify `protectedPaths` (`.github`, `.smithers`, `.agents`, `chromium/patches`, `native`) | PR diff / Smithers Change | `S.Github.Policy` flags protected paths and restricts `todo`/merge actions to `maintainers: ["roninjin10"]` | Human maintainer approval required |
+| Publish npm package or deploy docs (`dangerouslyusebrowser.smithers.sh`) | Verified `main` commit merged by human maintainer | `release.yml` runs full `smthrs ci //...`, `npm test`, `uphill --require-targets`, and tarball rehearsal | Pipeline aborts on any non-zero exit |
+
+## Connecting agents to Smithers Cloud MCP
+
+`.mcp.json` configures `smithers-cloud` at `https://smithers.sh/api/mcp` so every agent working on Dub interacts directly with Smithers Cloud to manage artifacts, TODOs, issues, PRs, stacks of changesets, flows, and wiki pages. Person-only actions (merging, final triage, committing TODOs, secrets) remain host-enforced for human maintainers.
+
+## Related pages
+
+- [[start-here]]
+- [[factory-and-trust]]
+
+
+---
+<!-- .smithers/wiki/pages/factory-and-trust.md -->
+
+# Smithers Cloud factory, object store, and trust model
+
+Dub is built publicly as a Smithers Cloud coding factory at [smithers.sh/smithersai/dangerouslyusebrowser](https://smithers.sh/smithersai/dangerouslyusebrowser), mirroring cleanly to [github.com/smithersai/dangerouslyusebrowser](https://github.com/smithersai/dangerouslyusebrowser).
+
+## Shared Smithers Cloud object store (`.smithers/WORKSPACE.ts`)
+
+Every build and test target declared in `PACKAGE.ts` and `.smithers/PACKAGE.ts` hashes its exact source closure and declared host binaries (`node`, `npm`, `bun`, `c++`, `sh`). Results cache locally in `.smithers/cache` and sync through the shared Smithers Cloud object store at `https://build.smithers.sh` using separated credentials:
+
+- `SMITHERS_CACHE_READ_TOKEN`: Read-only cache lookup (safe to expose to untrusted runs).
+- `SMITHERS_CACHE_WRITE_TOKEN`: Cache publication (restricted strictly to trusted maintainer and `main`-branch controlled sandboxes).
+
+## Trusted vs untrusted execution
+
+We actively welcome and encourage non-maintainers to run tests, Uphill audits, and flows on their changes, because most contributors act in good faith. Security holds by construction rather than by blocking contributors:
+
+| Capability | Trusted (Maintainer / Controlled Sandbox) | Untrusted (Non-Maintainer / Fork PR) |
+| --- | --- | --- |
+| Run unit, fuzz, MCP, and Uphill checks | Allowed | Allowed and encouraged |
+| Read from `build.smithers.sh` cache | Allowed | Allowed (read-only) |
+| Write to `build.smithers.sh` object store | Allowed | Blocked (no write token) |
+| Modify `protectedPaths` (`.github`, `.smithers`, `chromium/patches`, `native`) | Allowed with review | Flagged and gated for maintainer |
+| Skip quality gates or merge to `main` | Human maintainer only | Blocked |
+| Trigger npm release and docs publish | Automatic on merge to `main` | Blocked |
+
+## Lighthouse-style backpressure (`.agents/uphill/`)
+
+Instead of opaque CI logs, Dub runs Uphill across five scored categories (`bridge-safety`, `typescript-quality`, `mcp-security`, `testing-and-fuzz`, `docs-and-footprint`), rendering a Google Lighthouse-style visual audit report (`site/audit.html` and `.uphill/report.html`) with 0-100 circular gauges, missed targets, baseline diffs, and opportunities ranked by score impact.
+
+## Personalized Factory UI (`.smithers/home.json`)
+
+The Smithers Cloud homepage adapts automatically to who opens the repository:
+- **Maintainer (`roninjin10`)**: Opens on the `Today` cockpit (`branch.new` hotkey `b`, live `issues`, live `stack` of changesets, live `runs`, and maintainer flow controls).
+- **Contributor**: Opens on the `Contribute` workbench (setup commands, untrusted-to-trusted workflow cards, links to Issues/PRs/Audit/Wiki, and codebase Q&A).
+- **Viewer (`everyone`)**: Opens on the open-source front door (Hero with install command, quickstart code, verified stats, capability cards, releases, and live audit links).
+
+## Automatic release and docs publishing
+
+Merging from Smithers Cloud to GitHub `main` automatically runs `.github/workflows/release.yml`, which:
+1. Checks whether `package.json` version moved ahead of npm or whether docs, wiki, site, or audit files changed.
+2. Runs full incremental CI (`smthrs ci //...`) and Lighthouse backpressure (`uphill --compact`).
+3. Rehearses and publishes `dangerouslyusebrowser` to npm + creates a verified GitHub Release when the version advances.
+4. Rebuilds and deploys `dangerouslyusebrowser.smithers.sh` (landing page, personalized factory UI, live Lighthouse audit report, public wiki, Mythical History, and `llms.txt`).
+
+## Related pages
+
+- [[start-here]]
+- [[cloud-mcp-and-auth]]
+
+
+---
+<!-- .smithers/wiki/mythical-history.md -->
+
+# Mythical History of Dub
+
+A source-grounded chronicle of **Dub (DangerouslyUseBrowser)** built on pinned Chromium `157.0.8082.0` (`0e331aaf43bf`). Every epoch below links directly to committed source files, patches, and dated verification receipts.
+
+## Epochs
+
+### Epoch I: The Seam Census and the C++20 Bridge (2026-09-30)
+
+> **Stage:** Foundation
+
+Dub began with a hard refusal: no stock-CDP wrapper, no Playwright shim, no Electron shell. The first commits carved a minimal C ABI and N-API v8 bridge over AF_UNIX with whole-call deadlines, incur HTTP MCP commands, and a source-backed seam census across 32 pinned Chromium 157 paths.
+
+**Verified commits:**
+- `b138b7df` (2026-11-24) feat(release): add dub install auto-downloader, prebuilt N-API binaries, fuzz tests, demo video, and docs site
+- `2566fee2` (2026-09-30) docs: specify first Chromium build integration and session lifecycle
+- `1d72070b` (2026-09-30) docs: commit source-backed seam census, build plan and full acceptance gates
+- `d143978d` (2026-09-30) draft: checkpoint Chromium native dispatcher and local IPC listener
+
+**Key artifacts:** `docs/spec.md`, `docs/seams.md`, `docs/decisions.md`, `docs/first-build.md`, `native/dub.cc`, `native/addon.cc`
+
+### Epoch II: First Light: Compiled Chromium 157 Fork (Stage A) (2026-11-23)
+
+> **Stage:** Compiled Fork
+
+Pinned Chromium 157.0.8082.0 (0e331aaf43bf) compiled cleanly on Linux x86-64 with the Dub native dispatcher wired directly into chrome/browser:core. A real MCP client crossed incur, TypeScript, N-API, and AF_UNIX to dispatch a native trusted click inside the compiled fork.
+
+**Verified commits:**
+- `429abfd3` (2026-11-23) feat(stage-a): compile Dub Chromium 157 fork and pass real-browser MCP + actor click suite
+
+**Key artifacts:** `chromium/revision.json`, `chromium/patches/0001-stage-a-dub-core.patch`, `tests/browser/stage-a.test.mjs`
+
+### Epoch III: NetworkService Mastery and Native WebMCP (Milestones 1 and 2) (2026-11-23)
+
+> **Stage:** DEMO-01 & DEMO-03
+
+Dub moved below navigation-only hooks directly into Chromium NetworkService, intercepting tabs, dedicated/shared/service workers, CacheStorage, and HTTP disk cache. Alongside it landed promise-aware evaluation, persistent profile ownership, native actor tools, and live WebMCP page-tool discovery.
+
+**Verified commits:**
+- `16d982f0` (2026-11-23) Implement Milestone 1 (eval/screenshot/actor/WebMCP/profile) and Milestone 2 (NetworkService interception)
+
+**Key artifacts:** `chromium/patches/0002-milestone-1-renderer-webmcp-upload.patch`, `chromium/patches/0003-milestone-2-network-interception.patch`, `tests/browser/milestone-1-act.test.mjs`, `tests/browser/milestone-2-network.test.mjs`
+
+### Epoch IV: Bending Time Without Breaking Sibling Tabs (Milestone 3) (2026-11-23)
+
+> **Stage:** DEMO-02
+
+Rejecting process-wide virtual time, Dub patched V8 and Blink with per-tab isolated clock domains. One tab froze at 2026-01-01, stepped exact animation frames, and jumped 31 days into trial expiry while a sibling tab in the exact same renderer process stayed on wall clock.
+
+**Verified commits:**
+- `4d26d0c7` (2026-11-23) feat(milestone-3): implement isolated per-tab engine clock across V8 and Blink
+
+**Key artifacts:** `chromium/patches/0004-milestone-3-per-tab-clock.patch`, `tests/browser/milestone-3-clock.test.mjs`, `docs/evidence/2026-11-23/README.md`
+
+### Epoch V: Launch Evidence, Prebuilds, Fuzzing, and Docs Site (2026-11-24)
+
+> **Stage:** v0.1.0-alpha.1
+
+All three reproducible launch demos passed against the packaged 390 MiB Linux x86-64 bundle with SHA-256 checksums, fresh-install verification, prebuilt N-API binaries for macOS arm64 and Linux x64, 4 fuzz suites, and the public site at dangerouslyusebrowser.smithers.sh.
+
+**Verified commits:**
+- `b138b7df` (2026-11-24) feat(release): add dub install auto-downloader, prebuilt N-API binaries, fuzz tests, demo video, and docs site
+- `06d7c3cc` (2026-11-23) feat(launch): add reproducible demos, launch evidence bundle, and verified README
+- `2030aa8b` (2026-09-30) spec: record Dub fork contract, native architecture and release gates
+
+**Key artifacts:** `docs/evidence/2026-11-23/README.md`, `docs/evidence/2026-11-23/demos-receipt.json`, `demos/run-demos.mjs`, `tests/fuzz.test.mjs`
+
+### Epoch VI: QuickJS Code Mode, Jev, Triggers, and Live TS Plugins (Milestone 4) (2026-11-26)
+
+> **Stage:** Programmable Runtime
+
+Chromium gained a live AF_UNIX push event stream (dub_events) feeding a full Smithers-powered runtime: persistent QuickJS REPL realms, typed Jev evaluators, BYO agent adapters, reactive triggers, and hot-reloadable TypeScript plugins.
+
+**Verified commits:**
+- `d84fad3e` (2026-11-26) feat(milestone-4): add Chromium push events, Smithers QuickJS code mode, Jev, BYO agent triggers, and TS plugins
+
+**Key artifacts:** `chromium/patches/0005-milestone-4-control-events-plugins.patch`, `src/smithers-runtime.ts`, `src/plugins.ts`, `src/triggers.ts`, `tests/plugins-smithers.test.mjs`
+
+### Epoch VII: The Smithers Cloud Factory Switchover (2026-11-26)
+
+> **Stage:** Public Factory
+
+Dub switched permanently onto Smithers Cloud: incremental smthrs targets backed by the shared build.smithers.sh object store, single-use one-time sandbox auth tokens, strict untrusted-vs-trusted cache isolation, Lighthouse-style Uphill backpressure, personalized Maintainer/Contributor/Viewer views, Obsidian wiki, and automated release and docs pipelines.
+
+**Verified commits:**
+- `d84fad3e` (2026-11-26) feat(milestone-4): add Chromium push events, Smithers QuickJS code mode, Jev, BYO agent triggers, and TS plugins
+
+**Key artifacts:** `.smithers/WORKSPACE.ts`, `.smithers/FACTORY.ts`, `.smithers/home.json`, `.agents/uphill/uphill.yaml`, `src/auth.ts`, `site/audit.html`
+
+## Verified Commit Ledger (from `jj log`)
+
+| Commit | Date | Description |
+| --- | --- | --- |
+| `d84fad3e` | 2026-11-26 | feat(milestone-4): add Chromium push events, Smithers QuickJS code mode, Jev, BYO agent triggers, and TS plugins |
+| `b138b7df` | 2026-11-24 | feat(release): add dub install auto-downloader, prebuilt N-API binaries, fuzz tests, demo video, and docs site |
+| `06d7c3cc` | 2026-11-23 | feat(launch): add reproducible demos, launch evidence bundle, and verified README |
+| `4d26d0c7` | 2026-11-23 | feat(milestone-3): implement isolated per-tab engine clock across V8 and Blink |
+| `16d982f0` | 2026-11-23 | Implement Milestone 1 (eval/screenshot/actor/WebMCP/profile) and Milestone 2 (NetworkService interception) |
+| `429abfd3` | 2026-11-23 | feat(stage-a): compile Dub Chromium 157 fork and pass real-browser MCP + actor click suite |
+| `2566fee2` | 2026-09-30 | docs: specify first Chromium build integration and session lifecycle |
+| `1d72070b` | 2026-09-30 | docs: commit source-backed seam census, build plan and full acceptance gates |
+| `d143978d` | 2026-09-30 | draft: checkpoint Chromium native dispatcher and local IPC listener |
+| `67c91e7f` | 2026-09-30 | feat: add typed SDK, incur commands, HTTP MCP server and browser lifecycle |
+| `79c48d29` | 2026-09-30 | test: verify compiled N-API framing, concurrency, deadlines and errors |
+| `2030aa8b` | 2026-09-30 | spec: record Dub fork contract, native architecture and release gates |
+
+
+
+---
+<!-- docs/spec.md -->
+
+# Dub implementation contract
+
+Dub (DangerouslyUseBrowser) is a real Chromium fork that lets an agent directly control, mock, inspect, and modify browser internals. Run one persistent `dub serve` process; any MCP client connects to its `/mcp` endpoint. The public TypeScript API and incur commands wrap native N-API bindings. Chromium remains a separately sandboxed multiprocess browser.
+
+This contract records the original request, including requirements not yet implemented. It is not a completion claim. Delivery is tracked in [plue#777](https://github.com/smithersai/plue/issues/777); private deployment and commercial details stay in that private issue.
+
+## Required shape
+
+```
+LLM / CLI -> incur TypeScript commands -> typed SDK -> N-API addon
+                                                    |
+                                              native C ABI
+                                                    |
+                                      private local IPC connection
+                                                    |
+                                          forked Chromium C++
+                                     browser / renderer / network
+```
+
+- A true fork: Chromium source may be changed at any seam. No stock-browser, CDP-only, Electron, or CEF substitute.
+- N-API is the binding boundary requested by the user. No extra Rust or Zig layer is needed unless it solves a concrete problem.
+- A persistent browser session survives independent tool calls and MCP sessions. `dub serve` owns the launched browser and cleans up on shutdown.
+- Typed incur commands are exposed over MCP HTTP, with CLI equivalents and useful errors. CLI calls address the running session instead of starting unrelated browsers.
+- No per-action confirmation prompts. A separate durable profile is the default; explicit configuration can use an existing compatible profile, with ordinary Chromium profile locking.
+- Fail clearly if the fork is absent or has an incompatible protocol. Never silently launch stock Chrome.
+- Default listener: loopback. Non-loopback access requires a token. Browser-internal IPC is local and private.
+
+## Three required demos
+
+### 1. Rewrite the network
+
+Mock, block, rewrite, and inspect requests/responses across all tabs, dedicated/shared workers, and service-worker network traffic. Add/remove rules live. Match URLs, return chosen status/headers/body, redirect or modify outgoing requests, replace text in response bodies, and inspect a bounded log. Include service-worker-produced and cache-served responses in the coverage audit; do not claim coverage solely from an HTTP fetch test.
+
+Demonstrations: change an API response to an admin-user fixture; hot-patch a live JavaScript bundle; show the requests affected. A navigation-only interceptor does not satisfy this scope.
+
+### 2. Control the clock
+
+Freeze at a chosen date, advance by a duration (including 31 days), step frames, and resume a selected tab. Verify Date, performance.now(), timers, and animations independently. Define renderer-process sharing and cross-frame/worker semantics explicitly. Do not implement time control by replacing only JavaScript Date.
+
+Demonstrations: exercise trial expiry in seconds and capture an animation one frame at a time. Verify another tab remains unaffected.
+
+### 3. Act as you
+
+Use a persistent real profile. Expose Chromium's actual native actor tools for click, type, navigation, upload, tab selection and related actions, plus discover/invoke tools registered by a page through WebMCP. Do not label DOM click emulation as Chromium actor tools.
+
+Demonstrations: act on a test site's signed-in state, perform a native actor interaction, and discover/invoke a page-registered tool. Development tests use fixture accounts and profiles, not the user's credentials.
+
+## Seam census
+
+Maintain a source-backed map covering network, time, input, rendering, JS engine, storage/profile, tabs/actor, and DevTools/WebMCP. Each entry needs the pinned source path, ownership process/thread, proposed native interface, scope and limits, and the real-browser test proving behavior. Record gaps instead of inventing a completed interface.
+
+## Release gates
+
+1. Reproducible pinned Chromium checkout, overlays/patches, GN build and installation instructions.
+2. Native C ABI and N-API build on supported platforms, with transport error, timeout, malformed-input and lifecycle tests.
+3. Typed SDK, CLI and actual MCP client tests through incur.
+4. Compiled fork end-to-end tests for every claim in all three demos, including workers, profile persistence, time isolation, native actor and WebMCP.
+5. Installable package and browser artifact with explicit platform support, checksums and licenses; a clean-machine installation smoke test.
+6. A concise README with three working examples, a reproducible local demo, screenshot/video evidence and truthful tweet copy.
+7. Source/spec/decisions committed with jj, landed on main and pushed. No private infrastructure details or credentials in public artifacts.
+
+A passing transport fixture is not proof that the browser fork works. An overlay that applies cleanly is not proof that it compiles. A compiled binary is not proof that all advertised browser behavior works. Release readiness requires the actual receipts above.
+
+
+---
+<!-- docs/seams.md -->
+
+# Native seam census
+
+Source baseline: Chromium [`0e331aaf43bf5e1ffe16e65140de2d925c18f0a2`](https://chromium.googlesource.com/chromium/src/+/0e331aaf43bf5e1ffe16e65140de2d925c18f0a2), version 157.0.8082.0. Paths and APIs below were inspected at that revision. These are implementation cards, not verified features. All open work is tracked by [plue#777](https://github.com/smithersai/plue/issues/777).
+
+## 1. Network
+
+- **Ownership:** network service sequence for ordinary HTTP(S); browser and renderer loaders for service-worker responses.
+- **Paths:** `services/network/network_context.cc` (`CreateURLLoaderFactory`); `services/network/public/mojom/network_service.mojom`; `chrome/browser/chrome_content_browser_client.cc` (`OnNetworkServiceCreated`); `content/browser/service_worker/service_worker_main_resource_loader.cc`; `content/renderer/service_worker/service_worker_subresource_loader.cc`.
+- **Native surface:** `net.set/list/remove/log`; mock, block, outgoing request rewrite and decoded-body text patch. Policy is versioned and owned by the browser; Mojo distributes it to service/renderer consumers. Reinstall the current version after a network-service restart.
+- **Design:** insert a factory/client proxy that can substitute responses or transform body pipes without blocking IO. Intercept service-worker synthetic/cache responses at their response delivery seams as well. Tag transformed requests so a fallback or retry does not apply a patch twice. Include memory-cache behavior in the Blink loader audit.
+- **Semantics to implement:** deterministic rule precedence; rule IDs; original/final URL and rule-version log receipts; atomic updates; bounded logs; decoded text transformations; corrected content length and encoding headers; unchanged bytes for nonmatching responses. Body size cap and redirect limits must produce explicit errors, not truncation or silent passthrough.
+- **Gate:** test navigation, fetch, dedicated/shared worker, service-worker fetch, synthetic Response, CacheStorage and browser cache independently, including an existing worker and a new worker after a live rule update.
+- **Size:** medium/large; several process boundaries. The original navigation interceptor is insufficient.
+
+## 2. Time
+
+- **Ownership:** Blink page/frame task queues, workers, V8 execution contexts and the compositor.
+- **Paths:** `third_party/blink/renderer/platform/scheduler/public/virtual_time_controller.h`; `.../scheduler/common/process_time_override_coordinator.cc`; `.../scheduler/common/auto_advancing_virtual_time_domain.h`; `.../scheduler/main_thread/main_thread_scheduler_impl.cc`; `third_party/blink/renderer/core/timing/performance.cc`; `.../core/animation/document_timeline.cc`; `.../core/dom/document.h`.
+- **Native surface:** `clock.freeze/advance/step/resume`, addressed by stable tab ID. Commands complete after the requested logical-time work/frame is committed, not merely after a scheduling request is enqueued.
+- **Finding:** the existing virtual-time controller describes thread scope. Its coordinator installs a process-wide time override. `Performance::now()` reads `base::TimeTicks::Now()`, and the document timeline reads its document's animation clock. A Date-only shim or unmodified process override cannot satisfy the requested semantics.
+- **Planned fork design:** introduce a clock domain owned by the controlled page/frame tree, route its timer queues and performance/animation clocks to it, and provide an execution-context-aware V8 wall-clock hook for Date. Preserve the browser's real clock. Dedicated workers inherit their owner's domain; shared/service workers have explicit independent domains because they can serve multiple tabs. The first spike must prove the V8 hook and independent task scheduling before the full clock API is committed.
+- **Gate:** same-origin tabs verified to share a renderer; Date/new Date, performance, timeout/interval, requestAnimationFrame and CSS animation; cross-origin frames; navigation and BFCache; resume without backwards monotonic time. An uncontrolled tab and browser deadlines must continue on real time.
+- **Size:** largest seam; isolate and prove it early. Do not hide this uncertainty behind the existing CDP virtual-time command.
+
+## 3. Input and native actor tools
+
+- **Ownership:** browser UI thread and renderer main thread, using associated Mojo frame interfaces.
+- **Paths:** `chrome/common/chrome_render_frame.mojom` (`InvokeTool`); `chrome/renderer/chrome_render_frame_observer.cc`; `chrome/renderer/actor/tool_executor.cc`; `chrome/browser/actor/tools/*_tool_request.*`; `chrome/browser/actor/tools/file_upload_tool.*`; `content/public/browser/render_widget_host.h`.
+- **Native surface:** `tools.call` for actor click, type, scroll, select, drag, navigation, upload and tab activation; separate typed arguments and returned native failure codes. Click/type dispatch is drafted; it is not compiled or runtime verified.
+- **Design:** use actual native ToolInvocation/ToolRequest paths. Resolve text/selector targets to stable observed nodes and retain frame identity for time-of-use validation. Browser-owned upload tools need their browser delegate; renderer-only dispatch cannot implement them. Allocate task IDs per invocation and cancel when the frame/tab disappears.
+- **Gate:** trusted click and keyboard events, focused input, native failure propagation, a file upload with filename/content checks, stale-node and frame-navigation cases. DOM `.click()` is not evidence of native actor operation.
+- **Size:** medium; browser-level lifecycle and observation add work beyond binding the renderer interface.
+
+## 4. Rendering
+
+- **Ownership:** browser UI/Viz and Blink/compositor frame scheduling.
+- **Paths:** `content/public/browser/render_widget_host_view.h` (`CopyFromSurface`); `components/viz/common/frame_sinks/copy_output_result.h`; `ui/gfx/codec/png_codec.h`; `third_party/blink/renderer/core/animation/document_timeline.cc`.
+- **Native surface:** `page.screenshot`, viewport control, frame-step completion receipts. The screenshot entry point is drafted.
+- **Gate:** decode returned PNG, verify dimensions/pixels on the fixture, capture after navigation and after clock stepping, and verify deterministic repeated frames. Test occluded/headless surfaces and failures explicitly.
+- **Size:** small for capture; coupled to the clock seam for deterministic frame stepping.
+
+## 5. JavaScript engine
+
+- **Ownership:** a selected frame's main world/V8 isolate, with worker contexts addressed separately.
+- **Paths:** `content/public/browser/render_frame_host.h`; `content/public/browser/devtools_agent_host.h`; Blink `ScriptState`/execution-context mapping. Chromium DEPS pins V8 to `e148d55bb3322408d7c2790bce79959082638c1d`. At that pin, [`src/objects/js-objects.cc`](https://chromium.googlesource.com/v8/v8/+/e148d55bb3322408d7c2790bce79959082638c1d/src/objects/js-objects.cc) implements `JSDate::CurrentTimeValue(Isolate*)` by calling the platform wall clock; this was fetched and inspected directly. A context-aware hook is a fork change, not an existing public per-page time API.
+- **Native surface:** evaluation with promise completion, exception details, serializable results and explicit frame identity; extension points for deeper V8 inspection.
+- **Finding:** the current draft calls `ExecuteJavaScriptForTests`; that alone does not establish promise awaiting or robust exception serialization. Design the result contract before claiming an evaluation tool is complete. Internal DevTools facilities can support debugging; they are not the architecture's capability boundary.
+- **Gate:** awaited fetch, thrown exception, rejected promise, cyclic/nonserializable return, navigation while executing and termination of a timed-out operation. Further heap/profiler APIs belong in the census; only advertise implementations with receipts.
+- **Size:** medium; context-sensitive Date integration is part of the time spike.
+
+## 6. Storage and profile
+
+- **Ownership:** browser profile and storage partitions; individual storage services remain sandboxed.
+- **Paths:** `chrome/browser/profiles/profile_manager.h`; `content/public/browser/storage_partition.h`; Chromium's user-data-dir/profile-directory selection and process-singleton locking.
+- **Native surface:** profile identify/select/attach, clear chosen storage, explicit read/write APIs added by storage kind. Persistent separate profile by default. `profile attach` must report whether it reconnects to an existing Dub process or requires a browser restart; never imply attachment to arbitrary running stock Chrome.
+- **Gate:** fixture login, cookie/localStorage/IndexedDB persistence across browser restart, exclusive profile lock, clear scoped storage without touching another profile. Real-user credentials are not needed for these tests.
+- **Size:** small for launch/profile selection; medium for storage operations.
+
+## 7. Tabs and browser lifecycle
+
+- **Ownership:** browser UI thread.
+- **Paths:** `chrome/browser/ui/browser_window/public/global_browser_collection.h`; `chrome/browser/ui/tabs/tab_strip_model.h`; `components/tabs/public/tab_interface.h`; `components/tabs/public/supports_handles.h`; `chrome/browser/chrome_browser_main.cc`.
+- **Native surface:** start/status, stable-handle tab list/open/navigate/activate/close, with readiness states. Draft uses real TabInterface handles rather than tab-strip positions.
+- **Gate:** two windows, reorder and close tabs, discard/reload, user-initiated navigation, browser crash and shutdown, duplicate server startup, stale socket, closed frame and concurrent callers. Navigation command must define whether it acknowledges start or awaits a selected readiness condition.
+- **Size:** small/medium. This is the first compile-and-MCP vertical slice.
+
+## 8. DevTools and WebMCP
+
+- **Ownership:** browser agent hosts and Blink document model contexts.
+- **Paths:** `third_party/blink/public/devtools_protocol/domains/WebMCP.pdl`; `third_party/blink/renderer/core/inspector/inspector_web_mcp_agent.cc`; `third_party/blink/renderer/core/exported/web_document.cc`; `chrome/common/chrome_render_frame.mojom`.
+- **Native surface:** `tools.list/call`, exposing page tools with input schemas and frame IDs alongside actual actor tools. Reuse `ModelContext::ListTools` and the native execution/result lifecycle, or the internal WebMCP agent host when useful.
+- **Finding:** this pinned WebMCP domain does not have `listTools`. Enabling it emits `toolsAdded`; registrations/removals are events. `invokeTool` returns an invocation ID before `toolResponded` supplies the result. The catalog and invocation need lifetime state, not a single fire-and-forget method call.
+- **Gate:** pre-existing/dynamic tools, removals, duplicate names in different frames, completed/error/canceled invocation, cross-document result, and navigation invalidating the old catalog. Return actual tool output, not just the invocation ID.
+- **Size:** medium.
+
+
+---
+<!-- docs/acceptance.md -->
+
+# Acceptance and delivery plan
+
+All incomplete items below belong to [plue#777](https://github.com/smithersai/plue/issues/777). This is the full launch contract, not a list of work claimed done. The original scope is preserved in [spec.md](spec.md).
+
+## Build sequence
+
+| Stage | Work | Exit evidence |
+| --- | --- | --- |
+| A — bridge | Integrate the native socket server into the pinned Chromium GN/startup graph; status, tabs and one native actor click | Compiled fork → real N-API addon → incur MCP → actual client, with a native click observed in the page |
+| B — architecture spikes | Prove per-page clocks in shared renderers; intercept synthetic service-worker responses | Adversarial two-tab clock test and synthetic-response replacement pass in the actual fork |
+| C — network | Full request/response rule engine, decoded-body patching, rule lifecycle and logs | All request-origin/cache cases below, including restart recovery |
+| D — time | Date/performance/timers/animation consistency, frame stepping, resume and navigation | Coherent selected-tab clock; unaffected control tab and real browser deadlines |
+| E — native actions and WebMCP | Actor delegates, targeting, upload; live page-tool catalog and invocation lifecycle | Native actor suite and real registered page tool, including failures/navigation |
+| F — lifecycle and packaging | Profile attach/select, crash handling, capability-gated tool catalog, clean install and archives | Fresh-machine install and two-client persistent-session test |
+| G — launch | Three reproducible demos, screenshots/video, README and tweet draft | Every claim links to matching real-browser receipts; artifacts downloadable and installable |
+
+Stages B–E share one builder. Do not finish a polished launch page before the risky seams are proven. Independent source work can be concurrent only with explicit delegation; builder mutations/builds stay serialized.
+
+## Exact browser test inventory to implement
+
+| ID | Required proof |
+| --- | --- |
+| BRIDGE-01 | MCP initialize/list/call reaches the pinned fork; stock Chrome and mismatched protocol are rejected |
+| BRIDGE-02 | Two clients share tabs/rules/clock state; one client disconnecting does not stop the session |
+| BRIDGE-03 | Browser crash, native request timeout, frame destruction and shutdown yield bounded failures and no orphan browser |
+| BRIDGE-04 | Close the last window, retain the selected profile/session, then open a new tab; another profile becoming active cannot change scope |
+| BRIDGE-05 | Stalled requests reach the connection limit and expire, restoring capacity; shutdown/disconnect releases pending work and preserves any replacement socket |
+| NET-01 | Mock/block/redirect/patch in a top-level navigation and ordinary fetch; selected status/headers/body are actually received |
+| NET-02 | Dedicated worker, shared worker and service-worker outbound fetch before and after a rule update |
+| NET-03 | Service-worker synthetic Response, CacheStorage reply, HTTP disk cache and Blink memory-cache hit |
+| NET-04 | Compressed/chunked body, empty body, binary content, redirect chain, cancellation and body limit; no accidental double patch |
+| NET-05 | Rule precedence/remove/list and logs/follow, bounded retention with a gap receipt, network-service crash and policy replay |
+| CLOCK-01 | Date.now/new Date, performance.now, timeout/interval at a chosen epoch; 31-day advance fires due work with defined limits |
+| CLOCK-02 | Two same-origin tabs confirmed to share a renderer: freezing/advancing one leaves the other on real time |
+| CLOCK-03 | rAF and CSS animation each advance exactly the requested frame count; screenshot matches the committed frame |
+| CLOCK-04 | Same-origin/cross-origin frames, dedicated workers, navigation/BFCache and resume; independent shared/service-worker domains documented |
+| CLOCK-05 | Browser IPC timeouts and network/security housekeeping remain on real time; infinite interval/page loops cannot hang the browser |
+| ACTOR-01 | Click/type/navigation/tab activation use native tools and produce expected trusted events and visible state |
+| ACTOR-02 | Text/selector targeting resolves the correct node/frame, detects stale targets, and reports Chromium native failure codes |
+| ACTOR-03 | Native file-upload flow reads only the explicitly selected fixture and submits the expected bytes |
+| WEBMCP-01 | Tools registered before and after connection are listed with current input schemas/frame IDs; removed tools disappear |
+| WEBMCP-02 | Complete/error/cancel responses and duplicate names in different frames; return actual outputs and preserve exception details |
+| WEBMCP-03 | Navigation invalidates catalog and resolves cross-document execution without leaving an invocation pending |
+| PROFILE-01 | Fixture account stays signed in across browser and MCP restart; existing profile lock is respected |
+| PROFILE-02 | Explicit profile selection/attach works and default profile remains separate; chosen storage operations are scoped |
+| RENDER-01 | PNG decodes with expected dimensions/pixels in headless and visible runs; closed/occluded frame behavior is explicit |
+| JS-01 | Promise-aware evaluation, exception/rejection and nonserializable-result errors; navigation/timeout cannot leak pending callbacks |
+| INSTALL-01 | Fresh-machine package and browser download/checksum/install; all runtime dependencies/notices present |
+| DEMO-01 | Rewrite a fixture API to admin, patch a live JS bundle, inspect log/follow through public commands |
+| DEMO-02 | Freeze at an ISO timestamp, advance 31 days, screenshot expiry, step one animation frame |
+| DEMO-03 | Select persistent fixture profile, native actor action, discover and execute a registered page tool |
+
+## Tests already executed
+
+`npm run build:native`, `npm run build`, and `npm test` passed on the initial local checkpoint. Eleven tests cover compiled native framing, fragmentation/UTF-8, concurrency, whole-call deadlines, invalid lengths/inputs, SDK envelope identity, real MCP client routing through incur to a protocol fixture, native error propagation, input validation and HTTP host/origin/token handling. These tests do not satisfy any gate that requires a real browser.
+
+The [first-build plan](first-build.md) defines the GN/lifecycle patch points and bounded-request contract for Stage A. These are planned requirements, not completed browser tests.
+
+## API decisions to finish during implementation
+
+- `profile attach --name Default` must have explicit process ownership semantics; choosing a profile at launch is not the full target command.
+- `net log --follow` needs a real bounded event stream, not repeated snapshots with missing events hidden.
+- CLI and MCP catalogs must advertise only capability-handshaken native methods. Current wrappers include planned commands whose browser handlers are not implemented.
+- Native completion needs a consistent result/error contract. Navigation and side-effect timeouts must not imply rollback; never automatically retry an action that may already have run.
+- The draft `page.evaluate` entry point does not yet await promises or serialize exceptions; the draft actor bridge lacks the full delegate/task lifecycle and upload/discovery paths.
+- Initial Linux artifact support must be stated directly. Building the Node addon on macOS does not make the Chromium fork available on macOS.
+
+## Launch evidence bundle
+
+Record source/overlay/Chromium/toolchain revisions, GN args, native build logs, browser/MCP test results, install logs, screenshots/video and checksums under a dated artifact receipt. README examples and tweet claims must point to that bundle. Keep server access, provider invoices and other private operating details out of public artifacts.
+
+
+---
+<!-- CONTRIBUTING.md -->
+
+# Contributing to Dub
+
+Dub (`smithersai/dangerouslyusebrowser`) is developed publicly on [Smithers Cloud](https://smithers.sh/smithersai/dangerouslyusebrowser) and mirrored to [GitHub](https://github.com/smithersai/dangerouslyusebrowser). External contributions, bug reports, fuzz cases, and Chromium seam improvements are welcome.
+
+## Quick start
+
+```sh
+npm ci
+npm run build:native
+npm run typecheck
+npm run build
+npm test
+npm run ci
+uphill --compact
+```
+
+Use Jujutsu (`jj`) for version control (`jj status`, `jj diff`, `jj commit`, `jj bookmark`, `jj git push`).
+
+## Connecting your agent via Smithers Cloud MCP
+
+This repository ships `.mcp.json` pointing to `https://smithers.sh/api/mcp`. Connect your own agent (Claude Code, Codex, Antigravity, Cursor) over MCP to read issues, create artifacts, propose changesets, and inspect flows. Person-only actions (merging, final triage, committing TODOs, secrets) always require a human maintainer.
+
+## Trust model: untrusted runs are encouraged
+
+You do not need maintainer permissions to build, test, fuzz, or audit Dub:
+- Non-maintainer and fork pull requests run all unit, fuzz, MCP, and Uphill Lighthouse checks in **untrusted** mode with read-only access to the shared Smithers Cloud object store (`https://build.smithers.sh`).
+- Untrusted execution results never write to the shared cache, never receive release credentials, and never skip maintainer review or `protectedPaths` gates (`.github/`, `.smithers/`, `.agents/`, `chromium/patches/`, `native/`, `scripts/`, `package.json`).
+- After review, a human maintainer (`roninjin10`) lands approved changes with full contributor credit. Merging to `main` automatically runs trusted verification, updates the shared cache, publishes docs/wiki/audit reports to `dangerouslyusebrowser.smithers.sh`, and triggers releases when `package.json` version advances.
+
+## Quality bar and Lighthouse backpressure
+
+Every change is measured by five Uphill backpressure categories:
+1. **Native Bridge & Seam Safety**: C++20 `-Wall -Wextra -Werror`, zero `abort()`/`exit()`, valid Chromium 157 overlay patches, zero private infrastructure leaks.
+2. **TypeScript Quality**: Zero explicit `any`, zero `@ts-ignore`/`@ts-expect-error`, zero `console.log` in library modules, concise functions.
+3. **MCP Security & Trust**: Loopback default, Host/Origin pinning, SHA-256 + `timingSafeEqual` one-time tokens, untrusted attenuation, protected paths.
+4. **Testing & Fuzzing**: Real tests for every behavior change, fuzz coverage on wire/auth/install boundaries, compiled-fork browser proofs for browser claims.
+5. **Docs, Wiki & Footprint**: Lean prebuilds, zero broken Markdown links, up-to-date wiki, Mythical History, and `llms.txt`.
+
+Never claim an unbuilt Chromium patch or a bridge-fixture test proves compiled-browser behavior. See [docs/acceptance.md](docs/acceptance.md) and [docs/first-build.md](docs/first-build.md) for the full contract.

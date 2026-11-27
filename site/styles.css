@@ -3,9 +3,11 @@
   --surface: #ffffff;
   --code-bg: #f4f4f2;
   --ink: #141413;
+  --fg: #141413;
   --muted: #57534e;
   --subtle: #78716c;
   --border: #e7e5e4;
+  --line: #e7e5e4;
   --accent: #b91c1c;
   --accent-soft: #fef2f2;
   --accent-border: #fecaca;
@@ -13,7 +15,7 @@
   --ok-soft: #f0fdf4;
   --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --measure: 760px;
+  --measure: 840px;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -22,9 +24,11 @@
     --surface: #171716;
     --code-bg: #1c1c1a;
     --ink: #f5f5f4;
+    --fg: #f5f5f4;
     --muted: #a8a29e;
     --subtle: #78716c;
     --border: #292524;
+    --line: #292524;
     --accent: #f87171;
     --accent-soft: #2a1414;
     --accent-border: #5c1f1f;
@@ -100,8 +104,203 @@ nav a {
   text-decoration: none;
 }
 
-nav a:hover {
+nav a:hover,
+nav a[aria-current="page"] {
   color: var(--ink);
+  font-weight: 600;
+}
+
+.wrap-wide {
+  max-width: 980px;
+}
+
+/* Smithers Cloud Personalized Factory Switcher */
+.factory-shell {
+  margin-top: 32px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.factory-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  background: var(--code-bg);
+}
+
+.factory-head-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.persona-bar {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.persona-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.persona-btn:hover {
+  color: var(--ink);
+}
+
+.persona-btn.active {
+  background: var(--ink);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+.persona-panel {
+  display: none;
+  padding: 20px 22px;
+}
+
+.persona-panel.active {
+  display: block;
+}
+
+.persona-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.persona-banner h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.persona-tag {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  background: var(--code-bg);
+}
+
+.persona-tag.trusted {
+  color: var(--ok);
+  background: var(--ok-soft);
+  border-color: color-mix(in srgb, var(--ok) 35%, transparent);
+}
+
+.persona-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.persona-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 13px 15px;
+  background: var(--bg);
+}
+
+.persona-card strong {
+  display: block;
+  font-size: 13.5px;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.persona-card p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.cta-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.cta-btn.primary {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+}
+
+.cta-btn:hover {
+  opacity: 0.9;
+}
+
+.audit-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin: 20px 0 6px;
+}
+
+.audit-mini {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  text-decoration: none;
+}
+
+.audit-mini strong {
+  font-family: var(--mono);
+  font-size: 20px;
+  color: var(--ok);
+  line-height: 1.1;
+}
+
+.audit-mini span {
+  font-size: 12px;
+  color: var(--muted);
 }
 
 /* Typography */

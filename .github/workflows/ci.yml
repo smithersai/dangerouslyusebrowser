@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  # Untrusted PR job: non-maintainers and fork PRs are encouraged to run all
+  # checks freely, with READ-ONLY access to the shared Smithers Cloud object
+  # store (`build.smithers.sh`). No cache write token or release secrets are
+  # ever exposed here so untrusted runs cannot poison the cache or skip gates.
+  untrusted-pr:
+    name: Untrusted PR Checks (Read-Only Cache)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      SMITHERS_CACHE_READ_TOKEN: ${{ secrets.SMITHERS_CACHE_READ_TOKEN }}
+      DUB_TRUST_TIER: untrusted
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run incremental Smithers CI graph (read-only object store)
+        run: ./node_modules/.bin/smthrs ci //... --ui plain
+      - name: Verify native build, typecheck, and unit/fuzz/auth tests
+        run: npm run build:native && npm run typecheck && npm run build && npm test
+      - name: Summarize trust posture
+        run: |
+          {
+            echo "### Untrusted PR Execution Receipt"
+            echo "- Trust tier: \`untrusted\` (read-only cache against \`https://build.smithers.sh\`)"
+            echo "- Shared object store writes: disabled (cannot poison cache)"
+            echo "- Protected paths & merge gate: enforced by human maintainer"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Trusted job: runs strictly on main pushes (e.g. merged from Smithers Cloud)
+  # or maintainer-dispatched runs in controlled sandboxes with read+write cache.
+  trusted-main:
+    name: Trusted Main CI (${{ matrix.os }})
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      SMITHERS_CACHE_READ_TOKEN: ${{ secrets.SMITHERS_CACHE_READ_TOKEN }}
+      SMITHERS_CACHE_WRITE_TOKEN: ${{ secrets.SMITHERS_CACHE_WRITE_TOKEN }}
+      DUB_TRUST_TIER: trusted
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run incremental Smithers CI graph (trusted read+write object store)
+        run: ./node_modules/.bin/smthrs ci //... --ui plain
+      - name: Verify native build, typecheck, and unit/fuzz/auth tests
+        run: npm run build:native && npm run typecheck && npm run build && npm test
+      - name: Verify package tarball contents
+        run: npm pack --dry-run

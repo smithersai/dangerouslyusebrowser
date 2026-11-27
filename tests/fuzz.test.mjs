@@ -9,8 +9,10 @@ import { once } from 'node:events';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
 import {
+  AuthError,
   Browser,
   NativeBridge,
+  TokenAuthority,
   createCommands,
   duration,
   installBrowser,
@@ -257,5 +259,50 @@ test('fuzz: HTTP MCP boundary rejects malformed origins, hosts, tokens & garbage
       body: req.body,
     });
     assert.ok(res.status === 401 || res.status === 403, `Expected 401/403, got ${res.status}`);
+  }
+});
+
+test('fuzz: TokenAuthority enforces atomic single-use, replay rejection, and untrusted scope attenuation across 200 trials', () => {
+  const rng = mulberry32(0x51a7f00d);
+  const authority = new TokenAuthority({ staticToken: 'dub-fuzz-master-token-0123456789' });
+  const roles = ['maintainer', 'contributor', 'sandbox', 'agent', 'viewer'];
+  const allScopes = ['mcp:read', 'mcp:write', 'mcp:admin', 'auth:mint', 'cache:read', 'cache:write', 'plugin:manage', 'profile:attach'];
+  const privileged = new Set(['mcp:admin', 'auth:mint', 'cache:write', 'plugin:manage', 'profile:attach']);
+
+  for (let i = 0; i < 200; i++) {
+    const role = roles[Math.floor(rng() * roles.length)];
+    const requestedScopes = allScopes.filter(() => rng() >= 0.5);
+    const minted = authority.mintOneTimeToken({
+      principal: `fuzz-${role}-${i}`,
+      role,
+      scopes: requestedScopes.length > 0 ? requestedScopes : undefined,
+      ttlMs: 60_000,
+    });
+
+    if (minted.trust === 'untrusted') {
+      for (const s of minted.scopes) {
+        assert.equal(privileged.has(s), false, `Untrusted token leaked privileged scope ${s}`);
+      }
+    }
+
+    // Mutate one byte of token -> must fail as invalid without consuming the real token
+    const mutated = `${minted.oneTimeToken.slice(0, -1)}${minted.oneTimeToken.endsWith('A') ? 'B' : 'A'}`;
+    assert.throws(() => authority.redeemOneTimeToken(mutated), err => err instanceof AuthError && err.code === 'OTT_INVALID');
+
+    // First valid redemption succeeds
+    const redeemed = authority.redeemOneTimeToken(minted.oneTimeToken);
+    assert.ok(authority.verifyAuthorization(`Bearer ${redeemed.sessionToken}`));
+
+    // Second redemption ALWAYS fails as replay
+    assert.throws(
+      () => authority.redeemOneTimeToken(minted.oneTimeToken),
+      err => err instanceof AuthError && err.code === 'OTT_ALREADY_USED'
+    );
+  }
+
+  // Garbage strings never redeem or crash
+  for (const garbage of ['', 'dub_ott_', 'dub_ott_' + 'x'.repeat(10000), 'Bearer \0\r\n', 'not-a-token']) {
+    assert.throws(() => authority.redeemOneTimeToken(garbage), err => err instanceof AuthError);
+    assert.equal(authority.verifyAuthorization(garbage), null);
   }
 });

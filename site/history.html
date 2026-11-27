@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mythical History | Dub (DangerouslyUseBrowser)</title>
+  <meta name="description" content="Source-grounded Mythical History of Dub, the Chromium 157 fork built publicly on Smithers Cloud.">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .chronicle-hero { padding: 36px 0 20px; border-bottom: 1px solid var(--line); }
+    .chronicle-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 22px; }
+    .chronicle-stat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+    .chronicle-stat strong { display: block; font-size: 20px; color: var(--fg); letter-spacing: -0.02em; }
+    .chronicle-stat span { font-size: 12px; color: var(--muted); }
+    .timeline { display: flex; flex-direction: column; gap: 22px; margin: 34px 0 48px; }
+    .epoch-card { display: grid; grid-template-columns: 44px 1fr; gap: 18px; }
+    .epoch-rail { display: flex; flex-direction: column; align-items: center; }
+    .epoch-index { width: 36px; height: 36px; border-radius: 999px; background: var(--surface); border: 1px solid var(--accent-border, #f59e0b55); color: var(--accent, #f59e0b); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 12px; font-weight: 700; flex-shrink: 0; }
+    .epoch-line { width: 1px; flex: 1; background: var(--line); margin-top: 8px; }
+    .epoch-card:last-child .epoch-line { display: none; }
+    .epoch-body { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+    .epoch-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; }
+    .epoch-era { font-family: var(--mono); color: var(--accent, #f59e0b); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+    .epoch-badge { background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.28); color: var(--fg); padding: 2px 8px; border-radius: 999px; font-size: 11px; }
+    .epoch-date { color: var(--muted); font-family: var(--mono); margin-left: auto; }
+    .epoch-body h2 { margin: 0 0 10px; font-size: 20px; }
+    .epoch-body p { margin: 0 0 14px; color: var(--muted); line-height: 1.65; }
+    .epoch-commits { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; }
+    .commit-pill { display: flex; gap: 10px; align-items: baseline; font-size: 12.5px; padding: 6px 10px; border-radius: 7px; background: var(--code-bg); border: 1px solid var(--line); }
+    .commit-pill .sha { font-family: var(--mono); color: var(--accent); flex-shrink: 0; }
+    .commit-pill .cdate { font-family: var(--mono); color: var(--muted); flex-shrink: 0; }
+    .commit-pill .ctitle { color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .artifact-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .artifact-chip { font-family: var(--mono); font-size: 11px; padding: 3px 8px; border-radius: 6px; background: var(--code-bg); border: 1px solid var(--line); color: var(--muted); }
+    .ledger-table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 13px; }
+    .ledger-table th, .ledger-table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+    .ledger-table th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+    @media (max-width: 640px) { .epoch-card { grid-template-columns: 1fr; } .epoch-rail { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="wrap wrap-wide">
+    <header>
+      <a class="brand" href="/">
+        <span class="brand-name">Dub</span>
+        <span class="brand-pkg">dangerouslyusebrowser</span>
+      </a>
+      <nav aria-label="Primary">
+        <a href="/">Home</a>
+        <a href="/audit">Lighthouse Audit</a>
+        <a href="/wiki">Wiki</a>
+        <a href="/history" aria-current="page">Mythical History</a>
+        <a href="/llms.txt">llms.txt</a>
+        <a href="https://smithers.sh/smithersai/dangerouslyusebrowser">Smithers Cloud</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="chronicle-hero">
+        <div class="eyebrow">
+          <span class="dot" aria-hidden="true"></span>
+          <span>Generated from verified jj history &middot; Chromium 157.0.8082.0</span>
+        </div>
+        <h1>Mythical History of Dub</h1>
+        <p class="lead">
+          Every architectural turning point from the first C ABI framing test to the compiled Chromium 157 fork,
+          per-tab isolated engine clocks, QuickJS plugins, and the public Smithers Cloud coding factory.
+        </p>
+        <div class="chronicle-stats">
+          <div class="chronicle-stat"><strong>7 Epochs</strong><span>Documented milestones</span></div>
+          <div class="chronicle-stat"><strong>12 Commits</strong><span>Verified jj ledger</span></div>
+          <div class="chronicle-stat"><strong>5 Patches</strong><span>Pinned Chromium 157.0.8082.0</span></div>
+          <div class="chronicle-stat"><strong>Zero Slop</strong><span>Backed by real build receipts</span></div>
+        </div>
+      </section>
+
+      <section class="timeline" aria-label="Project timeline">
+        
+      <article class="epoch-card" id="epoch-01">
+        <div class="epoch-rail">
+          <span class="epoch-index">01</span>
+          <span class="epoch-line"></span>
+        </div>
+        <div class="epoch-body">
+          <div class="epoch-meta">
+            <span class="epoch-era">Epoch I</span>
+            <span class="epoch-badge">Foundation</span>
+            <span class="epoch-date">2026-09-30</span>
+          </div>
+          <h2>The Seam Census and the C++20 Bridge</h2>
+          <p>Dub began with a hard refusal: no stock-CDP wrapper, no Playwright shim, no Electron shell. The first commits carved a minimal C ABI and N-API v8 bridge over AF_UNIX with whole-call deadlines, incur HTTP MCP commands, and a source-backed seam census across 32 pinned Chromium 157 paths.</p>
+          <div class="epoch-commits"><div class="commit-pill"><span class="sha">b138b7df</span><span class="cdate">2026-11-24</span><span class="ctitle">feat(release): add dub install auto-downloader, prebuilt N-API binaries, fuzz tests, demo video, and docs site</span></div><div class="commit-pill"><span class="sha">2566fee2</span><span class="cdate">2026-09-30</span><span class="ctitle">docs: specify first Chromium build integration and session lifecycle</span></div><div class="commit-pill"><span class="sha">1d72070b</span><span class="cdate">2026-09-30</span><span class="ctitle">docs: commit source-backed seam census, build plan and full acceptance gates</span></div><div class="commit-pill"><span class="sha">d143978d</span><span class="cdate">2026-09-30</span><span class="ctitle">draft: checkpoint Chromium native dispatcher and local IPC listener</span></div></div>
+          <div class="artifact-row"><code class="artifact-chip">docs/spec.md</code><code class="artifact-chip">docs/seams.md</code><code class="artifact-chip">docs/decisions.md</code><code class="artifact-chip">docs/first-build.md</code><code class="artifact-chip">native/dub.cc</code><code class="artifact-chip">native/addon.cc</code></div>
+        </div>
+      </article>
+
+      <article class="epoch-card" id="epoch-02">
+        <div class="epoch-rail">
+          <span class="epoch-index">02</span>
+          <span class="epoch-line"></span>
+        </div>
+        <div class="epoch-body">
+          <div class="epoch-meta">
+            <span class="epoch-era">Epoch II</span>
+            <span class="epoch-badge">Compiled Fork</span>
+            <span class="epoch-date">2026-11-23</span>
+          </div>
+          <h2>First Light: Compiled Chromium 157 Fork (Stage A)</h2>
+          <p>Pinned Chromium 157.0.8082.0 (0e331aaf43bf) compiled cleanly on Linux x86-64 with the Dub native dispatcher wired directly into chrome/browser:core. A real MCP client crossed incur, TypeScript, N-API, and AF_UNIX to dispatch a native trusted click inside the compiled fork.</p>
+          <div class="epoch-commits"><div class="commit-pill"><span class="sha">429abfd3</span><span class="cdate">2026-11-23</span><span class="ctitle">feat(stage-a): compile Dub Chromium 157 fork and pass real-browser MCP + actor click suite</span></div></div>
+          <div class="artifact-row"><code class="artifact-chip">chromium/revision.json</code><code class="artifact-chip">chromium/patches/0001-stage-a-dub-core.patch</code><code class="artifact-chip">tests/browser/stage-a.test.mjs</code></div>
+        </div>
+      </article>
+
+      <article class="epoch-card" id="epoch-03">
+        <div class="epoch-rail">
+          <span class="epoch-index">03</span>
+          <span class="epoch-line"></span>
+        </div>
+        <div class="epoch-body">
+          <div class="epoch-meta">
+            <span class="epoch-era">Epoch III</span>
+            <span class="epoch-badge">DEMO-01 &amp; DEMO-03</span>
+            <span class="epoch-date">2026-11-23</span>
+          </div>
+          <h2>NetworkService Mastery and Native WebMCP (Milestones 1 and 2)</h2>
+          <p>Dub moved below navigation-only hooks directly into Chromium NetworkService, intercepting tabs, dedicated/shared/service workers, CacheStorage, and HTTP disk cache. Alongside it landed promise-aware evaluation, persistent profile ownership, native actor tools, and live WebMCP page-tool discovery.</p>
+          <div class="epoch-commits"><div class="commit-pill"><span class="sha">16d982f0</span><span class="cdate">2026-11-23</span><span class="ctitle">Implement Milestone 1 (eval/screenshot/actor/WebMCP/profile) and Milestone 2 (NetworkService interception)</span></div></div>
+          <div class="artifact-row"><code class="artifact-chip">chromium/patches/0002-milestone-1-renderer-webmcp-upload.patch</code><code class="artifact-chip">chromium/patches/0003-milestone-2-network-interception.patch</code><code class="artifact-chip">tests/browser/milestone-1-act.test.mjs</code><code class="artifact-chip">tests/browser/milestone-2-network.test.mjs</code></div>
+        </div>
+      </article>
+
+      <article class="epoch-card" id="epoch-04">
+        <div class="epoch-rail">
+          <span class="epoch-index">04</span>
+          <span class="epoch-line"></span>
+        </div>
+        <div class="epoch-body">
+          <div class="epoch-meta">
+            <span class="epoch-era">Epoch IV</span>
+            <span class="epoch-badge">DEMO-02</span>
+            <span class="epoch-date">2026-11-23</span>
+          </div>
+          <h2>Bending Time Without Breaking Sibling Tabs (Milestone 3)</h2>
+          <p>Rejecting process-wide virtual time, Dub patched V8 and Blink with per-tab isolated clock domains. One tab froze at 2026-01-01, stepped exact animation frames, and jumped 31 days into trial expiry while a sibling tab in the exact same renderer process stayed on wall clock.</p>
+          <div class="epoch-commits"><div class="commit-pill"><span class="sha">4d26d0c7</span><span class="cdate">2026-11-23</span><span class="ctitle">feat(milestone-3): implement isolated per-tab engine clock across V8 and Blink</span></div></div>
+          <div class="artifact-row"><code class="artifact-chip">chromium/patches/0004-milestone-3-per-tab-clock.patch</code><code class="artifact-chip">tests/browser/milestone-3-clock.test.mjs</code><code class="artifact-chip">docs/evidence/2026-11-23/README.md</code></div>
+        </div>
+      </article>
+
+      <article class="epoch-card" id="epoch-05">
+        <div class="epoch-rail">
+          <span class="epoch-index">05</span>
+          <span class="epoch-line"></span>
+        </div>
+        <div class="epoch-body">
+          <div class="epoch-meta">
+            <span class="epoch-era">Epoch V</span>
+            <span class="epoch-badge">v0.1.0-alpha.1</span>
+            <span class="epoch-date">2026-11-24</span>
+          </div>
+          <h2>Launch Evidence, Prebuilds, Fuzzing, and Docs Site</h2>
+          <p>All three reproducible launch demos passed against the packaged 390 MiB Linux x86-64 bundle with SHA-256 checksums, fresh-install verification, prebuilt N-API binaries for macOS arm64 and Linux x64, 4 fuzz suites, and the public site at dangerouslyusebrowser.smithers.sh.</p>
+          <div class="epoch-commits"><div class="commit-pill"><span class="sha">b138b7df</span><span class="cdate">2026-11-24</span><span class="ctitle">feat(release): add dub install auto-downloader, prebuilt N-API binaries, fuzz tests, demo video, and docs site</span></div><div class="commit-pill"><span class="sha">06d7c3cc</span><span class="cdate">2026-11-23</span><span class="ctitle">feat(launch): add reproducible demos, launch evidence bundle, and verified README</span></div><div class="commit-pill"><span class="sha">2030aa8b</span><span class="cdate">2026-09-30</span><span class="ctitle">spec: record Dub fork contract, native architecture and release gates</span></div></div>
+          <div class="artifact-row"><code class="artifact-chip">docs/evidence/2026-11-23/README.md</code><code class="artifact-chip">docs/evidence/2026-11-23/demos-receipt.json</code><code class="artifact-chip">demos/run-demos.mjs</code><code class="artifact-chip">tests/fuzz.test.mjs</code></div>
+        </div>
+      </article>
+
+      <article class="epoch-card" id="epoch-06">
+        <div class="epoch-rail">
+          <span class="epoch-index">06</span>
+          <span class="epoch-line"></span>
+        </div>
+        <div class="epoch-body">
+          <div class="epoch-meta">
+            <span class="epoch-era">Epoch VI</span>
+            <span class="epoch-badge">Programmable Runtime</span>
+            <span class="epoch-date">2026-11-26</span>
+          </div>
+          <h2>QuickJS Code Mode, Jev, Triggers, and Live TS Plugins (Milestone 4)</h2>
+          <p>Chromium gained a live AF_UNIX push event stream (dub_events) feeding a full Smithers-powered runtime: persistent QuickJS REPL realms, typed Jev evaluators, BYO agent adapters, reactive triggers, and hot-reloadable TypeScript plugins.</p>
+          <div class="epoch-commits"><div class="commit-pill"><span class="sha">d84fad3e</span><span class="cdate">2026-11-26</span><span class="ctitle">feat(milestone-4): add Chromium push events, Smithers QuickJS code mode, Jev, BYO agent triggers, and TS plugins</span></div></div>
+          <div class="artifact-row"><code class="artifact-chip">chromium/patches/0005-milestone-4-control-events-plugins.patch</code><code class="artifact-chip">src/smithers-runtime.ts</code><code class="artifact-chip">src/plugins.ts</code><code class="artifact-chip">src/triggers.ts</code><code class="artifact-chip">tests/plugins-smithers.test.mjs</code></div>
+        </div>
+      </article>
+
+      <article class="epoch-card" id="epoch-07">
+        <div class="epoch-rail">
+          <span class="epoch-index">07</span>
+          <span class="epoch-line"></span>
+        </div>
+        <div class="epoch-body">
+          <div class="epoch-meta">
+            <span class="epoch-era">Epoch VII</span>
+            <span class="epoch-badge">Public Factory</span>
+            <span class="epoch-date">2026-11-26</span>
+          </div>
+          <h2>The Smithers Cloud Factory Switchover</h2>
+          <p>Dub switched permanently onto Smithers Cloud: incremental smthrs targets backed by the shared build.smithers.sh object store, single-use one-time sandbox auth tokens, strict untrusted-vs-trusted cache isolation, Lighthouse-style Uphill backpressure, personalized Maintainer/Contributor/Viewer views, Obsidian wiki, and automated release and docs pipelines.</p>
+          <div class="epoch-commits"><div class="commit-pill"><span class="sha">d84fad3e</span><span class="cdate">2026-11-26</span><span class="ctitle">feat(milestone-4): add Chromium push events, Smithers QuickJS code mode, Jev, BYO agent triggers, and TS plugins</span></div></div>
+          <div class="artifact-row"><code class="artifact-chip">.smithers/WORKSPACE.ts</code><code class="artifact-chip">.smithers/FACTORY.ts</code><code class="artifact-chip">.smithers/home.json</code><code class="artifact-chip">.agents/uphill/uphill.yaml</code><code class="artifact-chip">src/auth.ts</code><code class="artifact-chip">site/audit.html</code></div>
+        </div>
+      </article>
+      </section>
+
+      <section>
+        <h2>Verified jj Commit Ledger</h2>
+        <table class="ledger-table">
+          <thead><tr><th>Commit</th><th>Date</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>d84fad3e</code></td><td>2026-11-26</td><td>feat(milestone-4): add Chromium push events, Smithers QuickJS code mode, Jev, BYO agent triggers, and TS plugins</td></tr>
+<tr><td><code>b138b7df</code></td><td>2026-11-24</td><td>feat(release): add dub install auto-downloader, prebuilt N-API binaries, fuzz tests, demo video, and docs site</td></tr>
+<tr><td><code>06d7c3cc</code></td><td>2026-11-23</td><td>feat(launch): add reproducible demos, launch evidence bundle, and verified README</td></tr>
+<tr><td><code>4d26d0c7</code></td><td>2026-11-23</td><td>feat(milestone-3): implement isolated per-tab engine clock across V8 and Blink</td></tr>
+<tr><td><code>16d982f0</code></td><td>2026-11-23</td><td>Implement Milestone 1 (eval/screenshot/actor/WebMCP/profile) and Milestone 2 (NetworkService interception)</td></tr>
+<tr><td><code>429abfd3</code></td><td>2026-11-23</td><td>feat(stage-a): compile Dub Chromium 157 fork and pass real-browser MCP + actor click suite</td></tr>
+<tr><td><code>2566fee2</code></td><td>2026-09-30</td><td>docs: specify first Chromium build integration and session lifecycle</td></tr>
+<tr><td><code>1d72070b</code></td><td>2026-09-30</td><td>docs: commit source-backed seam census, build plan and full acceptance gates</td></tr>
+<tr><td><code>d143978d</code></td><td>2026-09-30</td><td>draft: checkpoint Chromium native dispatcher and local IPC listener</td></tr>
+<tr><td><code>67c91e7f</code></td><td>2026-09-30</td><td>feat: add typed SDK, incur commands, HTTP MCP server and browser lifecycle</td></tr>
+<tr><td><code>79c48d29</code></td><td>2026-09-30</td><td>test: verify compiled N-API framing, concurrency, deadlines and errors</td></tr>
+<tr><td><code>2030aa8b</code></td><td>2026-09-30</td><td>spec: record Dub fork contract, native architecture and release gates</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+
+    <footer>
+      <span>Generated automatically from <code>jj log</code> and <code>.smithers/wiki/mythical-history.md</code></span>
+      <span><a href="https://smithers.sh/smithersai/dangerouslyusebrowser">smithers.sh/smithersai/dangerouslyusebrowser</a></span>
+    </footer>
+  </div>
+</body>
+</html>

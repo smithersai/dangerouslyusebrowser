@@ -1,0 +1,91 @@
+# Continuous Lighthouse-style backpressure metrics for Dub (smithersai/dangerouslyusebrowser).
+# Scripts run from the repository root and append metric lines to $UPHILL_METRICS.
+# Run: uphill --compact   |   Full HTML Lighthouse report: uphill && node scripts/build-audit-report.mjs
+
+bridge-safety:
+  run: node --experimental-strip-types .agents/uphill/metrics/bridge-safety.ts
+  title: Native Bridge & Seam Safety
+  description: Protect the C++20 N-API bridge, Chromium 157 overlay patches, and public repository hygiene.
+  cpp-no-abort:
+    weight: 2
+    description: Never call abort(), exit(), or std::terminate() in native/ C++ addon code; return typed N-API errors instead.
+  cpp-strict-flags:
+    description: Compile native/ with -std=c++20, -Wall, -Wextra, -Werror, and -DNAPI_VERSION=8.
+  overlay-integrity:
+    weight: 2
+    description: Keep chromium/revision.json pinned, all unified patches valid, and overlay files non-empty and leak-free.
+  no-private-leaks:
+    weight: 2
+    description: Never commit private infrastructure hostnames, local user paths, or internal codenames into public files.
+
+typescript-quality:
+  run: node --experimental-strip-types .agents/uphill/metrics/typescript-quality.ts
+  title: TypeScript Quality
+  description: Enforce strict typing, zero compiler suppressions, clean stdout for MCP, and modular functions across src/.
+  ts-no-explicit-any:
+    weight: 2
+    description: "Avoid explicit `: any` or `as any` in production TypeScript modules under src/."
+  ts-no-suppressions:
+    weight: 2
+    description: Eliminate @ts-ignore, @ts-expect-error, and @ts-nocheck directives in production src/ files.
+  ts-no-console-log:
+    weight: 2
+    description: Never call console.log in library src/ modules so MCP stdio/HTTP streams stay uncorrupted.
+  ts-max-fn-lines:
+    poor: 260
+    description: Keep TypeScript functions concise (target <= 110 lines) across src/ modules.
+
+mcp-security:
+  run: node --experimental-strip-types .agents/uphill/metrics/mcp-security.ts
+  title: MCP Security & Trust
+  description: Enforce loopback defaults, timing-safe one-time auth tokens, untrusted execution isolation, and protected factory paths.
+  loopback-and-timing-safe:
+    weight: 2
+    description: Default HTTP MCP listener to loopback, require token for non-loopback binds, and verify tokens with timingSafeEqual.
+  one-time-sandbox-auth:
+    weight: 2
+    description: Support single-use one-time authentication tokens for sandboxes and agents with replay rejection and TTL expiry.
+  protected-factory-paths:
+    weight: 2
+    description: Declare protectedPaths and maintainers in .smithers/FACTORY.ts so untrusted changes cannot rewrite CI or factory trust roots.
+  untrusted-cache-isolation:
+    weight: 2
+    description: Restrict untrusted/fork CI runs to read-only Smithers Cloud object store cache access so untrusted runs cannot poison the cache.
+
+testing-and-fuzz:
+  run: node --experimental-strip-types .agents/uphill/metrics/testing-and-fuzz.ts
+  title: Testing & Fuzzing
+  description: Maintain high test-to-source ratio, fuzz boundary coverage, and compiled-fork acceptance suites.
+  test-to-src-ratio:
+    better: higher
+    poor: 15
+    weight: 2
+    description: Maintain at least 55% test-to-source line ratio across tests/ vs src/ + native/.
+  fuzz-tests:
+    better: higher
+    poor: 1
+    weight: 2
+    description: Keep broad fuzz coverage across N-API framing, HTTP boundaries, SHA-256 installer, durations, and one-time auth.
+  unit-tests:
+    better: higher
+    poor: 8
+    weight: 2
+    description: Maintain comprehensive unit, bridge, MCP, auth, trigger, and plugin test coverage across tests/*.test.mjs.
+  browser-acceptance-suites:
+    better: higher
+    poor: 1
+    description: Cover every milestone (Stage A + Milestones 1-4) with real-browser acceptance test suites under tests/browser/.
+
+docs-and-footprint:
+  run: node --experimental-strip-types .agents/uphill/metrics/docs-and-footprint.ts
+  title: Docs, Wiki & Footprint
+  description: Keep prebuilt N-API binaries lean, markdown links valid, and public wiki, mythical history, and llms.txt current.
+  prebuild-size:
+    poor: 500kB
+    description: Keep each prebuilt dub.node N-API binary under 160 kB.
+  markdown-links:
+    weight: 2
+    description: Keep all relative Markdown links across README.md, docs/, and .smithers/wiki/ resolving to existing files.
+  factory-knowledge:
+    weight: 2
+    description: Keep .smithers/wiki/, mythical-history.md, .smithers/home.json, and site/llms.txt present and valid.

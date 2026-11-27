@@ -1,0 +1,17 @@
+---
+description: Regenerate Dub's Mythical History chronicle from verified jj commits, milestones, and dated evidence bundles.
+capabilities:
+  - "fs:read:**"
+  - "fs:write:.smithers/wiki/mythical-history.md"
+  - "fs:write:site/history.html"
+  - "proc:spawn:node scripts/build-mythical-history.mjs*"
+model: repository/author
+budget:
+  tokens: 24000
+  milliseconds: 120000
+---
+
+Build Dub's Mythical History directly from real `jj` commit history and dated launch evidence bundles:
+1. Run `node scripts/build-mythical-history.mjs` to project verified milestones and commits into `.smithers/wiki/mythical-history.md` and `site/history.html`.
+2. Distinguish clearly between verified compiled-fork milestones, bridge-verified runtime capabilities, and planned future work.
+3. Preserve chronological accuracy and link every epoch to its exact commit hash and evidence files.

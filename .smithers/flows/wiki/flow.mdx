@@ -1,0 +1,18 @@
+---
+description: Verify and refresh Dub's Obsidian-compatible source-cited wiki, site/llms.txt index, and public wiki UI.
+capabilities:
+  - "fs:read:**"
+  - "fs:write:.smithers/wiki/**"
+  - "fs:write:site/**"
+  - "proc:spawn:node scripts/build-knowledge.mjs*"
+model: repository/author
+budget:
+  tokens: 32000
+  milliseconds: 180000
+---
+
+Refresh Dub's public knowledge graph from `.smithers/coding-project.json` and `.smithers/wiki/pages/*.md`:
+1. Verify every declared input file exists and every relative Markdown link resolves.
+2. Run `node scripts/build-knowledge.mjs` to regenerate `site/llms.txt`, `site/llms-full.txt`, `site/wiki.html`, and `site/docs/*.md`.
+3. Keep all claims strictly grounded in source code and dated evidence receipts under `docs/evidence/`.
+4. Never include private infrastructure hostnames, credentials, or internal codenames.

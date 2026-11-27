@@ -176,88 +176,76 @@ export class PluginManager {
     return { ...loaded, filePath: abs };
   }
 
-  async load(plugin: DubPlugin, filePath?: string): Promise<{ name: string; tools: string[]; pageTools: string[] }> {
-    if (this.plugins.has(plugin.name)) {
-      await this.unload(plugin.name);
-    }
-
-    const rec: LoadedPlugin = {
-      name: plugin.name,
-      description: plugin.description,
-      filePath,
-      loadedAt: Date.now(),
-      tools: [],
-      pageTools: [],
-      exposedFunctions: [],
-      logs: [],
+  private buildNetApi(pluginName: string): PluginContext['net'] {
+    return {
+      handle: (match, handler, opts = {}) =>
+        this.triggers.registerDirectCallback({
+          kind: opts.stage === 'response' ? 'net.response' : 'net.request',
+          match,
+          regex: opts.regex,
+          methods: opts.methods,
+          stage: opts.stage ?? 'request',
+          timeoutMs: opts.timeoutMs,
+          failOpen: opts.failOpen,
+          pluginId: pluginName,
+          handler: async payload => {
+            const req: NetworkCallbackRequest = {
+              stage: (payload.stage as 'request' | 'response') ?? 'request',
+              ruleId: String(payload.ruleId ?? ''),
+              url: String(payload.url ?? ''),
+              method: String(payload.method ?? 'GET'),
+              status: Number(payload.status ?? 0),
+              requestHeaders: (payload.requestHeaders as Record<string, string>) ?? {},
+              responseHeaders: (payload.responseHeaders as Record<string, string>) ?? {},
+              body: String(payload.body ?? ''),
+              bodyTruncated: Boolean(payload.bodyTruncated),
+              json: <T = unknown>() => {
+                try { return JSON.parse(String(payload.body ?? '')) as T; } catch { return undefined; }
+              },
+            };
+            const dec = await handler(req);
+            if (dec.action === 'mock' || dec.action === 'modify') {
+              const headers = { ...(dec.headers ?? {}) };
+              let body = dec.body;
+              if (dec.json !== undefined) {
+                body = JSON.stringify(dec.json);
+                if (!Object.keys(headers).some(k => k.toLowerCase() === 'content-type')) {
+                  headers['content-type'] = 'application/json';
+                }
+              }
+              return { ...dec, headers, ...(body !== undefined ? { body } : {}) };
+            }
+            return dec;
+          },
+        }),
+      setRule: rule => this.browser.setRule({ ...rule, pluginId: pluginName }),
+      mock: (match, opts) => {
+        const headers = { ...(opts.headers ?? {}) };
+        const body = opts.json !== undefined ? JSON.stringify(opts.json) : (opts.body ?? '');
+        if (opts.json !== undefined && !Object.keys(headers).some(k => k.toLowerCase() === 'content-type')) {
+          headers['content-type'] = 'application/json';
+        }
+        return this.browser.setRule({
+          match,
+          action: 'mock',
+          status: opts.status ?? 200,
+          body,
+          headers,
+          pluginId: pluginName,
+        });
+      },
+      block: (match, failError) =>
+        this.browser.setRule({ match, action: 'block', failError, pluginId: pluginName }),
+      patch: (match, replace, withText, regex = false) =>
+        this.browser.setRule({ match, action: 'patch', replace, with: withText, patchRegex: regex, pluginId: pluginName }),
     };
-    this.plugins.set(plugin.name, rec);
+  }
 
-    const ctx: PluginContext = {
+  private buildPluginContext(plugin: DubPlugin, rec: LoadedPlugin): PluginContext {
+    return {
       pluginId: plugin.name,
       browser: this.browser,
-      net: {
-        handle: (match, handler, opts = {}) =>
-          this.triggers.registerDirectCallback({
-            kind: opts.stage === 'response' ? 'net.response' : 'net.request',
-            match,
-            regex: opts.regex,
-            methods: opts.methods,
-            stage: opts.stage ?? 'request',
-            timeoutMs: opts.timeoutMs,
-            failOpen: opts.failOpen,
-            pluginId: plugin.name,
-            handler: async payload => {
-              const req: NetworkCallbackRequest = {
-                stage: (payload.stage as 'request' | 'response') ?? 'request',
-                ruleId: String(payload.ruleId ?? ''),
-                url: String(payload.url ?? ''),
-                method: String(payload.method ?? 'GET'),
-                status: Number(payload.status ?? 0),
-                requestHeaders: (payload.requestHeaders as Record<string, string>) ?? {},
-                responseHeaders: (payload.responseHeaders as Record<string, string>) ?? {},
-                body: String(payload.body ?? ''),
-                bodyTruncated: Boolean(payload.bodyTruncated),
-                json: <T = unknown>() => {
-                  try { return JSON.parse(String(payload.body ?? '')) as T; } catch { return undefined; }
-                },
-              };
-              const dec = await handler(req);
-              if (dec.action === 'mock' || dec.action === 'modify') {
-                const headers = { ...(dec.headers ?? {}) };
-                let body = dec.body;
-                if (dec.json !== undefined) {
-                  body = JSON.stringify(dec.json);
-                  if (!Object.keys(headers).some(k => k.toLowerCase() === 'content-type')) {
-                    headers['content-type'] = 'application/json';
-                  }
-                }
-                return { ...dec, headers, ...(body !== undefined ? { body } : {}) };
-              }
-              return dec;
-            },
-          }),
-        setRule: rule => this.browser.setRule({ ...rule, pluginId: plugin.name }),
-        mock: (match, opts) => {
-          const headers = { ...(opts.headers ?? {}) };
-          const body = opts.json !== undefined ? JSON.stringify(opts.json) : (opts.body ?? '');
-          if (opts.json !== undefined && !Object.keys(headers).some(k => k.toLowerCase() === 'content-type')) {
-            headers['content-type'] = 'application/json';
-          }
-          return this.browser.setRule({
-            match,
-            action: 'mock',
-            status: opts.status ?? 200,
-            body,
-            headers,
-            pluginId: plugin.name,
-          });
-        },
-        block: (match, failError) =>
-          this.browser.setRule({ match, action: 'block', failError, pluginId: plugin.name }),
-        patch: (match, replace, withText, regex = false) =>
-          this.browser.setRule({ match, action: 'patch', replace, with: withText, patchRegex: regex, pluginId: plugin.name }),
-      },
+      net: this.buildNetApi(plugin.name),
       triggers: {
         register: spec => this.triggers.register({ ...spec, pluginId: plugin.name }),
       },
@@ -266,7 +254,6 @@ export class PluginManager {
       tool: def => {
         this.customTools.set(def.name, { pluginId: plugin.name, def });
         rec.tools.push(def.name);
-        // Also expose plugin tools to Smithers QuickJS code-mode cells!
         this.codeRuntime.registerFlow({
           name: `plugin.${def.name}`,
           description: def.description,
@@ -316,6 +303,26 @@ export class PluginManager {
       code: (tsCode, opts) => this.codeRuntime.evaluate(tsCode, { realmId: `plugin-${plugin.name}`, ...opts }),
       log: (...args) => this.appendLog(plugin.name, 'info', args.map(a => (typeof a === 'string' ? a : JSON.stringify(a))).join(' ')),
     };
+  }
+
+  async load(plugin: DubPlugin, filePath?: string): Promise<{ name: string; tools: string[]; pageTools: string[] }> {
+    if (this.plugins.has(plugin.name)) {
+      await this.unload(plugin.name);
+    }
+
+    const rec: LoadedPlugin = {
+      name: plugin.name,
+      description: plugin.description,
+      filePath,
+      loadedAt: Date.now(),
+      tools: [],
+      pageTools: [],
+      exposedFunctions: [],
+      logs: [],
+    };
+    this.plugins.set(plugin.name, rec);
+
+    const ctx = this.buildPluginContext(plugin, rec);
 
     try {
       const cleanup = await plugin.setup(ctx);

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "smithers-cloud": {
+      "type": "http",
+      "url": "https://smithers.sh/api/mcp",
+      "description": "Smithers Cloud MCP for smithersai/dangerouslyusebrowser (artifacts, TODOs, issues, PRs, stacks, flows, wiki)"
+    }
+  }
+}

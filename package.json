@@ -34,7 +34,11 @@
     "test": "node --test tests/*.test.mjs",
     "test:browser": "node --test tests/browser/*.test.mjs",
     "dev": "npm run build && node bin/dub.mjs",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "smthrs": "smthrs",
+    "ci": "smthrs ci //...",
+    "factory:write": "smthrs target //.smithers:factory-write --write",
+    "factory:check": "smthrs ci //.smithers:factory-check"
   },
   "dependencies": {
     "@smthrs/harness": "^1.0.0-rc.18",
@@ -44,6 +48,14 @@
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
+    "@smthrs/artifacts": "1.0.0-rc.18",
+    "@smthrs/cli": "1.0.0-rc.18",
+    "@smthrs/flow": "1.0.0-rc.18",
+    "@smthrs/patterns": "1.0.0-rc.18",
+    "@smthrs/plan": "1.0.0-rc.18",
+    "@smthrs/sandbox": "1.0.0-rc.18",
+    "@smthrs/targets": "1.0.0-rc.18",
+    "@smthrs/views": "1.0.0-rc.18",
     "@types/node": "^22.0.0",
     "typescript": "^5.9.0"
   }

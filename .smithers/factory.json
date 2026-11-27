@@ -1,0 +1,386 @@
+{
+  "summary": "Dub Chromium 157 fork: incremental N-API CI, Lighthouse backpressure, one-time sandbox auth, and public wiki.",
+  "flows": [
+    {
+      "id": "uphill",
+      "description": "Score Dub bridge safety, TypeScript quality, MCP security, fuzzing, and docs with Uphill Lighthouse backpressure.",
+      "summary": "Run Lighthouse-style backpressure metrics across bridge safety, TypeScript, MCP security, fuzzing, and docs.",
+      "featured": true,
+      "kind": "ts",
+      "path": ".smithers/flows/uphill/flow.ts",
+      "capabilities": [
+        "sandbox:job"
+      ],
+      "model": null,
+      "modelInvocable": true,
+      "flows": []
+    },
+    {
+      "id": "checks/review",
+      "description": "Multi-lens review of Dub changes covering Chromium 157 seams, C++20 N-API safety, MCP one-time auth, QuickJS plugins, and build graph hygiene.",
+      "summary": "Multi-lens review covering Chromium 157 seams, C++20 N-API safety, MCP one-time auth, and QuickJS plugins.",
+      "featured": true,
+      "kind": "mdx",
+      "path": ".smithers/flows/checks/review/flow.mdx",
+      "capabilities": [
+        "fs:read:**"
+      ],
+      "model": null,
+      "modelInvocable": true,
+      "inputSchema": {
+        "dialect": "draft-2020-12",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "args"
+          ],
+          "additionalProperties": true
+        },
+        "definitions": {}
+      },
+      "flows": [
+        "coding/ReviewCheck"
+      ]
+    },
+    {
+      "id": "pr-triage",
+      "description": "Triage a pull request as untrusted input, checking scope, tests, Chromium seams, MCP security, and Lighthouse backpressure without approving or merging.",
+      "summary": "Triage pull requests as untrusted input without approving, merging, or writing to the shared cache.",
+      "featured": true,
+      "kind": "mdx",
+      "path": ".smithers/flows/pr-triage/flow.mdx",
+      "capabilities": [
+        "fs:read:**",
+        "proc:spawn:rg *"
+      ],
+      "model": "repository/research",
+      "modelInvocable": true,
+      "inputSchema": {
+        "dialect": "draft-2020-12",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "args"
+          ],
+          "additionalProperties": true
+        },
+        "definitions": {}
+      },
+      "flows": [],
+      "budget": {
+        "tokens": 32000,
+        "milliseconds": 300000
+      }
+    },
+    {
+      "id": "issue/repro",
+      "description": "Reproduce and validate a Dub bug report with the smallest safe native, MCP, or browser fixture before planning a fix.",
+      "summary": "Reproduce a Dub bug with the smallest native, MCP, or browser fixture before planning a fix.",
+      "featured": true,
+      "kind": "mdx",
+      "path": ".smithers/flows/issue/repro/flow.mdx",
+      "capabilities": [
+        "fs:read:**",
+        "proc:spawn:rg *",
+        "proc:spawn:npm run typecheck*",
+        "proc:spawn:npm test*"
+      ],
+      "model": "repository/research",
+      "modelInvocable": true,
+      "inputSchema": {
+        "dialect": "draft-2020-12",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "args"
+          ],
+          "additionalProperties": true
+        },
+        "definitions": {}
+      },
+      "flows": [],
+      "budget": {
+        "tokens": 32000,
+        "milliseconds": 300000
+      }
+    },
+    {
+      "id": "issue/poc",
+      "description": "Build a failing-test-first minimal proof of concept for a maintainer-accepted Dub TODO issue.",
+      "summary": "Build a failing-test-first proof of concept for a maintainer-accepted TODO issue.",
+      "featured": true,
+      "kind": "mdx",
+      "path": ".smithers/flows/issue/poc/flow.mdx",
+      "capabilities": [
+        "fs:read:**",
+        "fs:write:**",
+        "proc:spawn:rg *",
+        "proc:spawn:npm run build*",
+        "proc:spawn:npm run typecheck*",
+        "proc:spawn:npm test*"
+      ],
+      "model": "coding/poc",
+      "modelInvocable": false,
+      "inputSchema": {
+        "dialect": "draft-2020-12",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "args"
+          ],
+          "additionalProperties": true
+        },
+        "definitions": {}
+      },
+      "flows": [],
+      "budget": {
+        "tokens": 48000,
+        "milliseconds": 300000
+      }
+    },
+    {
+      "id": "sandbox-auth",
+      "description": "Mint a short-lived, single-use authentication token for a sandbox or BYO agent with strict trust-tier scope attenuation.",
+      "summary": "Mint a short-lived single-use authentication token for a controlled sandbox or BYO agent.",
+      "featured": true,
+      "kind": "mdx",
+      "path": ".smithers/flows/sandbox-auth/flow.mdx",
+      "capabilities": [
+        "fs:read:**",
+        "proc:spawn:node scripts/mint-sandbox-auth.mjs *"
+      ],
+      "model": "repository/research",
+      "modelInvocable": false,
+      "inputSchema": {
+        "dialect": "draft-2020-12",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "args"
+          ],
+          "additionalProperties": true
+        },
+        "definitions": {}
+      },
+      "flows": [],
+      "budget": {
+        "tokens": 8000,
+        "milliseconds": 60000
+      }
+    },
+    {
+      "id": "wiki",
+      "description": "Verify and refresh Dub's Obsidian-compatible source-cited wiki, site/llms.txt index, and public wiki UI.",
+      "summary": "Verify and refresh Dub's Obsidian-compatible source-cited wiki and site/llms.txt index.",
+      "featured": false,
+      "kind": "mdx",
+      "path": ".smithers/flows/wiki/flow.mdx",
+      "capabilities": [
+        "fs:read:**",
+        "fs:write:.smithers/wiki/**",
+        "fs:write:site/**",
+        "proc:spawn:node scripts/build-knowledge.mjs*"
+      ],
+      "model": "repository/author",
+      "modelInvocable": true,
+      "inputSchema": {
+        "dialect": "draft-2020-12",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "args"
+          ],
+          "additionalProperties": true
+        },
+        "definitions": {}
+      },
+      "flows": [],
+      "budget": {
+        "tokens": 32000,
+        "milliseconds": 180000
+      }
+    },
+    {
+      "id": "mythical-history",
+      "description": "Regenerate Dub's Mythical History chronicle from verified jj commits, milestones, and dated evidence bundles.",
+      "summary": "Regenerate Dub's Mythical History chronicle from verified jj commits and launch evidence.",
+      "featured": false,
+      "kind": "mdx",
+      "path": ".smithers/flows/mythical-history/flow.mdx",
+      "capabilities": [
+        "fs:read:**",
+        "fs:write:.smithers/wiki/mythical-history.md",
+        "fs:write:site/history.html",
+        "proc:spawn:node scripts/build-mythical-history.mjs*"
+      ],
+      "model": "repository/author",
+      "modelInvocable": true,
+      "inputSchema": {
+        "dialect": "draft-2020-12",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "args"
+          ],
+          "additionalProperties": true
+        },
+        "definitions": {}
+      },
+      "flows": [],
+      "budget": {
+        "tokens": 24000,
+        "milliseconds": 120000
+      }
+    },
+    {
+      "id": "release",
+      "description": "Check, build, rehearse, gate on Lighthouse backpressure, and publish a Dub release to npm and GitHub after maintainer approval.",
+      "summary": "Check, rehearse, gate on Lighthouse backpressure, and publish a Dub release after maintainer approval.",
+      "featured": false,
+      "kind": "mdx",
+      "path": ".smithers/flows/release/flow.mdx",
+      "capabilities": [
+        "fs:read:**",
+        "proc:spawn:npm *",
+        "proc:spawn:node scripts/*"
+      ],
+      "model": "repository/author",
+      "modelInvocable": false,
+      "inputSchema": {
+        "dialect": "draft-2020-12",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "args"
+          ],
+          "additionalProperties": true
+        },
+        "definitions": {}
+      },
+      "flows": [],
+      "budget": {
+        "tokens": 32000,
+        "milliseconds": 600000
+      }
+    },
+    {
+      "id": "docs-publish",
+      "description": "Rebuild and publish Dub's docs site, public wiki, Mythical History, Lighthouse audit report, and llms.txt to dangerouslyusebrowser.smithers.sh.",
+      "summary": "Rebuild and publish docs, public wiki, Mythical History, Lighthouse audit report, and llms.txt.",
+      "featured": false,
+      "kind": "mdx",
+      "path": ".smithers/flows/docs-publish/flow.mdx",
+      "capabilities": [
+        "fs:read:**",
+        "fs:write:site/**",
+        "proc:spawn:node scripts/*"
+      ],
+      "model": "repository/author",
+      "modelInvocable": false,
+      "inputSchema": {
+        "dialect": "draft-2020-12",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "args"
+          ],
+          "additionalProperties": true
+        },
+        "definitions": {}
+      },
+      "flows": [],
+      "budget": {
+        "tokens": 24000,
+        "milliseconds": 300000
+      }
+    }
+  ],
+  "on": [
+    {
+      "event": "issue.labeled:todo",
+      "flow": "issue/poc",
+      "description": "Build a failing test and PoC for every maintainer-accepted TODO"
+    },
+    {
+      "event": "change.opened",
+      "flow": "checks/review",
+      "description": "Review every Change across Dub's Chromium, N-API, MCP security, and runtime lenses"
+    },
+    {
+      "event": "change.updated",
+      "flow": "checks/review",
+      "description": "Re-review every updated Change"
+    },
+    {
+      "event": "schedule:0 14 * * 1",
+      "flow": "uphill",
+      "description": "Weekly Monday Lighthouse backpressure audit across all five Dub quality categories"
+    }
+  ],
+  "github": {
+    "mirror": "pull",
+    "issues": "two-way",
+    "changes": "send-upstream",
+    "protectedPaths": [
+      ".github",
+      ".smithers",
+      ".agents",
+      "PACKAGE.ts",
+      "AGENTS.md",
+      "package.json",
+      "package-lock.json",
+      "chromium/revision.json",
+      "chromium/patches",
+      "native",
+      "scripts"
+    ],
+    "maintainers": [
+      "roninjin10"
+    ]
+  }
+}

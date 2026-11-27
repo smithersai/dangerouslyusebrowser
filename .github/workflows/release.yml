@@ -1,0 +1,163 @@
+name: Release and Docs Publish
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      force_docs_publish:
+        description: Force rebuild and deploy of dangerouslyusebrowser.smithers.sh
+        type: boolean
+        default: false
+      force_release:
+        description: Force npm and GitHub release check
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Plan Release and Docs Publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      should_publish: ${{ steps.check.outputs.should_publish }}
+      should_deploy_docs: ${{ steps.check.outputs.should_deploy_docs }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - id: check
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p 'require("./package.json").version')"
+          published="$(npm view dangerouslyusebrowser version --prefer-online 2>/dev/null || echo "")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          should_publish="false"
+          should_deploy_docs="false"
+
+          if [ "$version" != "$published" ] || [ "${{ inputs.force_release }}" = "true" ]; then
+            should_publish="true"
+            should_deploy_docs="true"
+          elif [ "${{ inputs.force_docs_publish }}" = "true" ]; then
+            should_deploy_docs="true"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            if git diff --name-only HEAD~1 HEAD -- site/ docs/ .smithers/ .agents/ README.md CONTRIBUTING.md src/ native/ 2>/dev/null | grep -q .; then
+              should_deploy_docs="true"
+            fi
+          fi
+
+          echo "should_publish=$should_publish" >> "$GITHUB_OUTPUT"
+          echo "should_deploy_docs=$should_deploy_docs" >> "$GITHUB_OUTPUT"
+          echo "Plan: version=$version published=${published:-none} should_publish=$should_publish should_deploy_docs=$should_deploy_docs"
+
+  publish-docs:
+    name: Build and Deploy Docs, Wiki, History, and Lighthouse Audit
+    needs: plan
+    if: needs.plan.outputs.should_deploy_docs == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SMITHERS_CACHE_READ_TOKEN: ${{ secrets.SMITHERS_CACHE_READ_TOKEN }}
+      SMITHERS_CACHE_WRITE_TOKEN: ${{ secrets.SMITHERS_CACHE_WRITE_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies and Uphill
+        run: |
+          npm ci
+          curl -fsSL https://wevm.sh/uphill | sh
+          echo "$HOME/.uphill/bin" >> "$GITHUB_PATH"
+      - name: Rebuild site, wiki, Mythical History, llms.txt, and Lighthouse audit
+        run: |
+          node scripts/build-knowledge.mjs
+          uphill --compact
+          node scripts/build-audit-report.mjs
+          ./node_modules/.bin/smthrs ci //.smithers:* --ui plain
+      - name: Deploy site to dangerouslyusebrowser.smithers.sh
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler deploy --config site/wrangler.jsonc
+      - name: Verify live docs, wiki, history, audit, and llms.txt
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          for p in "/" "/audit" "/wiki" "/history" "/llms.txt" "/audit-summary.json"; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' "https://dangerouslyusebrowser.smithers.sh${p}")"
+            echo "GET ${p} -> HTTP ${code}"
+            test "$code" = "200"
+          done
+
+  release-package:
+    name: Rehearse and Publish Release v${{ needs.plan.outputs.version }}
+    needs: [plan, publish-docs]
+    if: needs.plan.outputs.should_publish == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      SMITHERS_CACHE_READ_TOKEN: ${{ secrets.SMITHERS_CACHE_READ_TOKEN }}
+      SMITHERS_CACHE_WRITE_TOKEN: ${{ secrets.SMITHERS_CACHE_WRITE_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+      - name: Install dependencies and Uphill
+        run: |
+          npm ci
+          curl -fsSL https://wevm.sh/uphill | sh
+          echo "$HOME/.uphill/bin" >> "$GITHUB_PATH"
+      - name: Run full trusted CI and Lighthouse backpressure gate
+        run: |
+          ./node_modules/.bin/smthrs ci //... --ui plain
+          npm run build:native && npm run typecheck && npm run build && npm test
+          uphill --compact --require-targets
+      - name: Pack and rehearse clean tarball install
+        run: |
+          tarball="$(npm pack --silent)"
+          sha256sum "$tarball" > SHA256SUMS.txt
+          tmp="$(mktemp -d)"
+          (cd "$tmp" && npm init -y >/dev/null && npm install "$GITHUB_WORKSPACE/$tarball" && npx dub --help >/dev/null)
+          rm -rf "$tmp"
+      - name: Publish to npm
+        if: env.NODE_AUTH_TOKEN != ''
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --provenance
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="v${{ needs.plan.outputs.version }}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" dangerouslyusebrowser-*.tgz SHA256SUMS.txt --clobber
+          else
+            gh release create "$tag" dangerouslyusebrowser-*.tgz SHA256SUMS.txt \
+              --title "Dub ${tag}" \
+              --generate-notes
+          fi

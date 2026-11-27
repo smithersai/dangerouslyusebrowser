@@ -1,0 +1,15 @@
+/cache/
+/reports/
+/node_modules/
+/data/
+/logs/
+/executions/
+/runs/
+/sandboxes/
+/state/
+/tmp/
+/pg/
+/*.db
+/*.db-shm
+/*.db-wal
+.check-*/

@@ -1,9 +1,29 @@
 node_modules/
 dist/
+dist-release/
 build/
 .local/
 artifacts/
 *.tgz
 .DS_Store
-
 .wrangler/
+
+# Smithers build cache, dependencies, and runtime state
+.flows/
+.smithers/cache/
+.smithers/reports/
+.smithers/node_modules/
+.smithers/data/
+.smithers/logs/
+.smithers/executions/
+.smithers/runs/
+.smithers/sandboxes/
+.smithers/state/
+.smithers/tmp/
+.smithers/pg/
+.smithers/*.db
+.smithers/*.db-shm
+.smithers/*.db-wal
+
+# Uphill generated reports (published via site/ and artifacts)
+.uphill/

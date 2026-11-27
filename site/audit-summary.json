@@ -1,0 +1,34 @@
+{
+  "generatedAt": "2026-11-27T08:01:52Z",
+  "compositeScore": 98,
+  "passingMetrics": 19,
+  "totalMetrics": 19,
+  "opportunities": 0,
+  "categories": [
+    {
+      "name": "bridge-safety",
+      "title": "Native Bridge & Seam Safety",
+      "score": 100
+    },
+    {
+      "name": "typescript-quality",
+      "title": "TypeScript Quality",
+      "score": 99
+    },
+    {
+      "name": "mcp-security",
+      "title": "MCP Security & Trust",
+      "score": 100
+    },
+    {
+      "name": "testing-and-fuzz",
+      "title": "Testing & Fuzzing",
+      "score": 93
+    },
+    {
+      "name": "docs-and-footprint",
+      "title": "Docs, Wiki & Footprint",
+      "score": 100
+    }
+  ]
+}

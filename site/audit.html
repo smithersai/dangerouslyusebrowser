@@ -1,0 +1,1944 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lighthouse Backpressure Audit | Dub (DangerouslyUseBrowser)</title>
+  <meta name="description" content="Live Uphill Lighthouse-style backpressure audit report for Dub (smithersai/dangerouslyusebrowser).">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .lh-banner { margin-top: 26px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 26px 28px; }
+    .lh-top { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; justify-content: space-between; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
+    .lh-top h1 { margin: 4px 0 8px; font-size: 28px; }
+    .lh-top p { margin: 0; color: var(--muted); max-width: 60ch; }
+    .lh-composite { display: flex; align-items: center; gap: 14px; background: rgba(255,255,255,0.025); border: 1px solid var(--line); border-radius: 14px; padding: 12px 18px; }
+    .lh-composite-meta strong { display: block; font-size: 14px; color: var(--fg); }
+    .lh-composite-meta span { display: block; font-size: 12px; color: var(--muted); }
+    .lh-gauges { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; padding-top: 24px; }
+    .lh-gauge-card { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; text-decoration: none; padding: 16px 10px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255,255,255,0.02); transition: transform 0.15s, border-color 0.15s; }
+    .lh-gauge-card:hover { transform: translateY(-2px); border-color: rgba(255,255,255,0.22); }
+    .lh-gauge-title { font-size: 13px; font-weight: 600; color: var(--fg); line-height: 1.3; }
+    .lh-gauge-pill, .lh-cat-badge { font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+    .lh-pass { color: #0cce6b; background: rgba(12, 206, 107, 0.13); border: 1px solid rgba(12, 206, 107, 0.35); }
+    .lh-warn { color: #ffa400; background: rgba(255, 164, 0, 0.13); border: 1px solid rgba(255, 164, 0, 0.35); }
+    .lh-fail { color: #ff4e42; background: rgba(255, 78, 66, 0.14); border: 1px solid rgba(255, 78, 66, 0.35); }
+    .lh-legend { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; justify-content: center; margin-top: 18px; font-size: 12px; color: var(--muted); font-family: var(--mono); }
+    .lh-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+    .lh-swatch { width: 10px; height: 10px; border-radius: 999px; display: inline-block; }
+    .lh-trust-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin: 24px 0; }
+    .lh-trust-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+    .lh-trust-card label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 4px; }
+    .lh-trust-card strong { display: block; font-size: 14px; color: var(--fg); }
+    .lh-trust-card span { display: block; font-size: 12px; color: var(--muted); margin-top: 3px; }
+    .lh-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; margin: 22px 0; }
+    .lh-panel h2 { margin: 0 0 12px; font-size: 18px; }
+    .lh-all-clear { display: flex; gap: 12px; align-items: center; padding: 14px; border-radius: 10px; background: rgba(12, 206, 107, 0.09); border: 1px solid rgba(12, 206, 107, 0.3); }
+    .lh-all-clear p { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+    .lh-dot { width: 12px; height: 12px; border-radius: 999px; flex-shrink: 0; }
+    .lh-pass-dot { background: #0cce6b; }
+    .lh-opp-list { display: flex; flex-direction: column; gap: 8px; }
+    .lh-opp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 10px; background: rgba(255, 164, 0, 0.07); border: 1px solid rgba(255, 164, 0, 0.25); }
+    .lh-gain { font-family: var(--mono); font-size: 12px; font-weight: 700; color: #ffa400; min-width: 64px; }
+    .lh-opp-main { flex: 1; min-width: 200px; }
+    .lh-opp-main strong { display: block; font-size: 13.5px; color: var(--fg); }
+    .lh-opp-main span { font-size: 12px; color: var(--muted); }
+    .lh-opp-delta { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 12px; }
+    .lh-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0 12px; }
+    .lh-filter-btn { background: var(--surface); border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 6px 14px; font-size: 12.5px; cursor: pointer; }
+    .lh-filter-btn.active { color: var(--fg); border-color: var(--accent, #f59e0b); background: rgba(245, 158, 11, 0.12); }
+    .lh-category { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; margin-bottom: 18px; }
+    .lh-cat-head { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+    .lh-cat-head h2 { margin: 0 0 4px; font-size: 19px; }
+    .lh-cat-head p { margin: 0; font-size: 13px; color: var(--muted); }
+    .lh-cat-badge { margin-left: auto; font-size: 13px; padding: 5px 12px; }
+    .lh-metric-list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+    .lh-metric { border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,0.015); overflow: hidden; }
+    .lh-metric-summary { display: flex; align-items: center; gap: 10px; padding: 11px 14px; cursor: pointer; list-style: none; font-size: 13.5px; }
+    .lh-metric-summary::-webkit-details-marker { display: none; }
+    .lh-status-dot { width: 10px; height: 10px; border-radius: 999px; flex-shrink: 0; }
+    .lh-dot-pass { background: #0cce6b; }
+    .lh-dot-warn { background: #ffa400; }
+    .lh-dot-fail { background: #ff4e42; }
+    .lh-metric-name { font-weight: 600; color: var(--fg); }
+    .lh-metric-weight { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-left: auto; }
+    .lh-metric-score { font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 6px; font-weight: 600; }
+    .lh-metric-body { padding: 0 14px 14px 34px; border-top: 1px solid var(--line); }
+    .lh-metric-desc { margin: 10px 0; font-size: 13px; color: var(--muted); }
+    .lh-items { display: flex; flex-direction: column; gap: 6px; }
+    .lh-item-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 7px; background: rgba(255,255,255,0.025); font-size: 12.5px; }
+    .lh-item-miss { background: rgba(255, 78, 66, 0.08); border: 1px solid rgba(255, 78, 66, 0.25); }
+    .lh-item-name { color: var(--fg); }
+    .lh-item-val { font-family: var(--mono); font-weight: 600; color: var(--fg); margin-left: auto; }
+    .lh-item-target { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+    .lh-item-note { width: 100%; font-size: 12px; color: var(--accent); }
+    .lh-raw-receipt { margin-top: 28px; }
+    .lh-raw-receipt summary { cursor: pointer; font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+    .lh-raw-receipt pre { margin-top: 10px; max-height: 360px; overflow: auto; background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px; padding: 14px; font-size: 11.5px; color: var(--fg); }
+  </style>
+</head>
+<body>
+  <div class="wrap wrap-wide">
+    <header>
+      <a class="brand" href="/">
+        <span class="brand-name">Dub</span>
+        <span class="brand-pkg">dangerouslyusebrowser</span>
+      </a>
+      <nav aria-label="Primary">
+        <a href="/">Home</a>
+        <a href="/audit" aria-current="page">Lighthouse Audit</a>
+        <a href="/wiki">Wiki</a>
+        <a href="/history">Mythical History</a>
+        <a href="/llms.txt">llms.txt</a>
+        <a href="https://smithers.sh/smithersai/dangerouslyusebrowser">Smithers Cloud</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="lh-banner">
+        <div class="lh-top">
+          <div>
+            <div class="eyebrow">
+              <span class="dot" aria-hidden="true"></span>
+              <span>Uphill Backpressure &middot; Chromium 157.0.8082.0 &middot; Generated 2026-11-27T08:01:52Z</span>
+            </div>
+            <h1>Dub Lighthouse Audit Report</h1>
+            <p>
+              Continuous, machine-verified backpressure across native C++20 bridge safety, TypeScript discipline,
+              MCP one-time auth security, fuzzing depth, and public factory knowledge.
+            </p>
+          </div>
+          <div class="lh-composite">
+            
+    <svg class="lh-gauge-svg" width="82" height="82" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="rgba(255,255,255,0.08)" stroke-width="7" />
+      <circle cx="50" cy="50" r="42" fill="none" stroke="#0cce6b" stroke-width="7"
+        stroke-linecap="round"
+        stroke-dasharray="263.89"
+        stroke-dashoffset="5.28"
+        transform="rotate(-90 50 50)" />
+      <text x="50" y="55" text-anchor="middle" fill="#0cce6b" font-size="27" font-weight="700" font-family="var(--mono)">98</text>
+    </svg>
+            <div class="lh-composite-meta">
+              <strong>Composite Score</strong>
+              <span>19 of 19 audits passing</span>
+              <span class="lh-gauge-pill lh-pass" style="display:inline-block;margin-top:4px;">Passing</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="lh-gauges">
+          
+      <a class="lh-gauge-card" href="#cat-bridge-safety">
+        
+    <svg class="lh-gauge-svg" width="98" height="98" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="rgba(255,255,255,0.08)" stroke-width="7" />
+      <circle cx="50" cy="50" r="42" fill="none" stroke="#0cce6b" stroke-width="7"
+        stroke-linecap="round"
+        stroke-dasharray="263.89"
+        stroke-dashoffset="0.00"
+        transform="rotate(-90 50 50)" />
+      <text x="50" y="55" text-anchor="middle" fill="#0cce6b" font-size="27" font-weight="700" font-family="var(--mono)">100</text>
+    </svg>
+        <span class="lh-gauge-title">Native Bridge &amp; Seam Safety</span>
+        <span class="lh-gauge-pill lh-pass">Passing</span>
+      </a>
+
+      <a class="lh-gauge-card" href="#cat-typescript-quality">
+        
+    <svg class="lh-gauge-svg" width="98" height="98" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="rgba(255,255,255,0.08)" stroke-width="7" />
+      <circle cx="50" cy="50" r="42" fill="none" stroke="#0cce6b" stroke-width="7"
+        stroke-linecap="round"
+        stroke-dasharray="263.89"
+        stroke-dashoffset="2.64"
+        transform="rotate(-90 50 50)" />
+      <text x="50" y="55" text-anchor="middle" fill="#0cce6b" font-size="27" font-weight="700" font-family="var(--mono)">99</text>
+    </svg>
+        <span class="lh-gauge-title">TypeScript Quality</span>
+        <span class="lh-gauge-pill lh-pass">Passing</span>
+      </a>
+
+      <a class="lh-gauge-card" href="#cat-mcp-security">
+        
+    <svg class="lh-gauge-svg" width="98" height="98" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="rgba(255,255,255,0.08)" stroke-width="7" />
+      <circle cx="50" cy="50" r="42" fill="none" stroke="#0cce6b" stroke-width="7"
+        stroke-linecap="round"
+        stroke-dasharray="263.89"
+        stroke-dashoffset="0.00"
+        transform="rotate(-90 50 50)" />
+      <text x="50" y="55" text-anchor="middle" fill="#0cce6b" font-size="27" font-weight="700" font-family="var(--mono)">100</text>
+    </svg>
+        <span class="lh-gauge-title">MCP Security &amp; Trust</span>
+        <span class="lh-gauge-pill lh-pass">Passing</span>
+      </a>
+
+      <a class="lh-gauge-card" href="#cat-testing-and-fuzz">
+        
+    <svg class="lh-gauge-svg" width="98" height="98" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="rgba(255,255,255,0.08)" stroke-width="7" />
+      <circle cx="50" cy="50" r="42" fill="none" stroke="#0cce6b" stroke-width="7"
+        stroke-linecap="round"
+        stroke-dasharray="263.89"
+        stroke-dashoffset="18.47"
+        transform="rotate(-90 50 50)" />
+      <text x="50" y="55" text-anchor="middle" fill="#0cce6b" font-size="27" font-weight="700" font-family="var(--mono)">93</text>
+    </svg>
+        <span class="lh-gauge-title">Testing &amp; Fuzzing</span>
+        <span class="lh-gauge-pill lh-pass">Passing</span>
+      </a>
+
+      <a class="lh-gauge-card" href="#cat-docs-and-footprint">
+        
+    <svg class="lh-gauge-svg" width="98" height="98" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="rgba(255,255,255,0.08)" stroke-width="7" />
+      <circle cx="50" cy="50" r="42" fill="none" stroke="#0cce6b" stroke-width="7"
+        stroke-linecap="round"
+        stroke-dasharray="263.89"
+        stroke-dashoffset="0.00"
+        transform="rotate(-90 50 50)" />
+      <text x="50" y="55" text-anchor="middle" fill="#0cce6b" font-size="27" font-weight="700" font-family="var(--mono)">100</text>
+    </svg>
+        <span class="lh-gauge-title">Docs, Wiki &amp; Footprint</span>
+        <span class="lh-gauge-pill lh-pass">Passing</span>
+      </a>
+        </div>
+
+        <div class="lh-legend" aria-label="Score legend">
+          <span class="lh-legend-item"><span class="lh-swatch" style="background:#ff4e42"></span>0-49 Failing</span>
+          <span class="lh-legend-item"><span class="lh-swatch" style="background:#ffa400"></span>50-89 Needs Work</span>
+          <span class="lh-legend-item"><span class="lh-swatch" style="background:#0cce6b"></span>90-100 Passing</span>
+        </div>
+      </section>
+
+      <section class="lh-trust-strip" aria-label="Trust and Object Store Posture">
+        <div class="lh-trust-card">
+          <label>Shared Object Store</label>
+          <strong>build.smithers.sh</strong>
+          <span>Incremental smthrs cache shared across controlled sandboxes</span>
+        </div>
+        <div class="lh-trust-card">
+          <label>Untrusted Execution</label>
+          <strong>Encouraged, Read-Only Cache</strong>
+          <span>Fork PRs run checks freely without cache write or gate bypass</span>
+        </div>
+        <div class="lh-trust-card">
+          <label>Protected Trust Roots</label>
+          <strong>11 Protected Paths</strong>
+          <span>Maintainers: roninjin10</span>
+        </div>
+        <div class="lh-trust-card">
+          <label>Sandbox MCP Auth</label>
+          <strong>Single-Use One-Time Tokens</strong>
+          <span>SHA-256 + timingSafeEqual + atomic replay rejection</span>
+        </div>
+      </section>
+
+      <section class="lh-panel">
+        <h2>Opportunities (0)</h2>
+        <div class="lh-all-clear">
+         <span class="lh-dot lh-pass-dot"></span>
+         <div>
+           <strong>All Lighthouse backpressure targets are passing.</strong>
+           <p>Every category clears its committed threshold with zero open opportunities.</p>
+         </div>
+       </div>
+      </section>
+
+      <div class="lh-filters" role="group" aria-label="Filter audits">
+        <button class="lh-filter-btn active" data-filter="all" type="button">All audits (19)</button>
+        <button class="lh-filter-btn" data-filter="pass" type="button">Passing (19)</button>
+        <button class="lh-filter-btn" data-filter="nonpass" type="button">Missed / Needs work (0)</button>
+      </div>
+
+      
+      <section class="lh-category" id="cat-bridge-safety">
+        <div class="lh-cat-head">
+          
+    <svg class="lh-gauge-svg" width="64" height="64" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="rgba(255,255,255,0.08)" stroke-width="7" />
+      <circle cx="50" cy="50" r="42" fill="none" stroke="#0cce6b" stroke-width="7"
+        stroke-linecap="round"
+        stroke-dasharray="263.89"
+        stroke-dashoffset="0.00"
+        transform="rotate(-90 50 50)" />
+      <text x="50" y="55" text-anchor="middle" fill="#0cce6b" font-size="27" font-weight="700" font-family="var(--mono)">100</text>
+    </svg>
+          <div>
+            <h2>Native Bridge &amp; Seam Safety</h2>
+            <p>Protect the C++20 N-API bridge, Chromium 157 overlay patches, and public repository hygiene.</p>
+          </div>
+          <span class="lh-cat-badge lh-pass">100 / 100</span>
+        </div>
+        <div class="lh-metric-list">
+          <details class="lh-metric" data-tier="pass" >
+            <summary class="lh-metric-summary">
+              <span class="lh-status-dot lh-dot-pass" aria-label="Passing"></span>
+              <span class="lh-metric-name">Cpp no abort</span>
+              <span class="lh-metric-weight">w=2</span>
+              <span class="lh-metric-score lh-pass">100/100</span>
+            </summary>
+            <div class="lh-metric-body">
+              <p class="lh-metric-desc">Never call abort(), exit(), or std::terminate() in native/ C++ addon code; return typed N-API errors instead.</p>
+              <div class="lh-items">
+              <div class="lh-item-row ">
+                <code class="lh-item-name">native</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div></div>
+            </div>
+          </details>
+
+          <details class="lh-metric" data-tier="pass" >
+            <summary class="lh-metric-summary">
+              <span class="lh-status-dot lh-dot-pass" aria-label="Passing"></span>
+              <span class="lh-metric-name">Cpp strict flags</span>
+              <span class="lh-metric-weight">w=1</span>
+              <span class="lh-metric-score lh-pass">100/100</span>
+            </summary>
+            <div class="lh-metric-body">
+              <p class="lh-metric-desc">Compile native/ with -std=c++20, -Wall, -Wextra, -Werror, and -DNAPI_VERSION=8.</p>
+              <div class="lh-items">
+              <div class="lh-item-row ">
+                <code class="lh-item-name">build-native.mjs</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div></div>
+            </div>
+          </details>
+
+          <details class="lh-metric" data-tier="pass" >
+            <summary class="lh-metric-summary">
+              <span class="lh-status-dot lh-dot-pass" aria-label="Passing"></span>
+              <span class="lh-metric-name">Overlay integrity</span>
+              <span class="lh-metric-weight">w=2</span>
+              <span class="lh-metric-score lh-pass">100/100</span>
+            </summary>
+            <div class="lh-metric-body">
+              <p class="lh-metric-desc">Keep chromium/revision.json pinned, all unified patches valid, and overlay files non-empty and leak-free.</p>
+              <div class="lh-items">
+              <div class="lh-item-row ">
+                <code class="lh-item-name">chromium-157</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div></div>
+            </div>
+          </details>
+
+          <details class="lh-metric" data-tier="pass" >
+            <summary class="lh-metric-summary">
+              <span class="lh-status-dot lh-dot-pass" aria-label="Passing"></span>
+              <span class="lh-metric-name">No private leaks</span>
+              <span class="lh-metric-weight">w=2</span>
+              <span class="lh-metric-score lh-pass">100/100</span>
+            </summary>
+            <div class="lh-metric-body">
+              <p class="lh-metric-desc">Never commit private infrastructure hostnames, local user paths, or internal codenames into public files.</p>
+              <div class="lh-items">
+              <div class="lh-item-row ">
+                <code class="lh-item-name">public-tree</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div></div>
+            </div>
+          </details></div>
+      </section>
+
+      <section class="lh-category" id="cat-typescript-quality">
+        <div class="lh-cat-head">
+          
+    <svg class="lh-gauge-svg" width="64" height="64" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="rgba(255,255,255,0.08)" stroke-width="7" />
+      <circle cx="50" cy="50" r="42" fill="none" stroke="#0cce6b" stroke-width="7"
+        stroke-linecap="round"
+        stroke-dasharray="263.89"
+        stroke-dashoffset="2.64"
+        transform="rotate(-90 50 50)" />
+      <text x="50" y="55" text-anchor="middle" fill="#0cce6b" font-size="27" font-weight="700" font-family="var(--mono)">99</text>
+    </svg>
+          <div>
+            <h2>TypeScript Quality</h2>
+            <p>Enforce strict typing, zero compiler suppressions, clean stdout for MCP, and modular functions across src/.</p>
+          </div>
+          <span class="lh-cat-badge lh-pass">99 / 100</span>
+        </div>
+        <div class="lh-metric-list">
+          <details class="lh-metric" data-tier="pass" >
+            <summary class="lh-metric-summary">
+              <span class="lh-status-dot lh-dot-pass" aria-label="Passing"></span>
+              <span class="lh-metric-name">Ts no explicit any</span>
+              <span class="lh-metric-weight">w=2</span>
+              <span class="lh-metric-score lh-pass">100/100</span>
+            </summary>
+            <div class="lh-metric-body">
+              <p class="lh-metric-desc">Avoid explicit `: any` or `as any` in production TypeScript modules under src/.</p>
+              <div class="lh-items">
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/agent-bridge.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/auth.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/browser.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/cli.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/commands.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/download.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/http.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/index.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/jev.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/launch.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/native.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/plugins.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/runtime.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/smithers-runtime.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/triggers.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div></div>
+            </div>
+          </details>
+
+          <details class="lh-metric" data-tier="pass" >
+            <summary class="lh-metric-summary">
+              <span class="lh-status-dot lh-dot-pass" aria-label="Passing"></span>
+              <span class="lh-metric-name">Ts no suppressions</span>
+              <span class="lh-metric-weight">w=2</span>
+              <span class="lh-metric-score lh-pass">100/100</span>
+            </summary>
+            <div class="lh-metric-body">
+              <p class="lh-metric-desc">Eliminate @ts-ignore, @ts-expect-error, and @ts-nocheck directives in production src/ files.</p>
+              <div class="lh-items">
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/agent-bridge.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/auth.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/browser.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/cli.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/commands.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/download.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/http.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/index.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/jev.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/launch.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/native.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/plugins.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/runtime.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/smithers-runtime.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/triggers.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div></div>
+            </div>
+          </details>
+
+          <details class="lh-metric" data-tier="pass" >
+            <summary class="lh-metric-summary">
+              <span class="lh-status-dot lh-dot-pass" aria-label="Passing"></span>
+              <span class="lh-metric-name">Ts no console log</span>
+              <span class="lh-metric-weight">w=2</span>
+              <span class="lh-metric-score lh-pass">100/100</span>
+            </summary>
+            <div class="lh-metric-body">
+              <p class="lh-metric-desc">Never call console.log in library src/ modules so MCP stdio/HTTP streams stay uncorrupted.</p>
+              <div class="lh-items">
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/agent-bridge.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/auth.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/browser.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/cli.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/commands.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/download.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/http.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/index.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/jev.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/launch.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/native.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/plugins.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/runtime.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/smithers-runtime.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/triggers.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div></div>
+            </div>
+          </details>
+
+          <details class="lh-metric" data-tier="pass" >
+            <summary class="lh-metric-summary">
+              <span class="lh-status-dot lh-dot-pass" aria-label="Passing"></span>
+              <span class="lh-metric-name">Ts max fn lines</span>
+              <span class="lh-metric-weight">w=1</span>
+              <span class="lh-metric-score lh-pass">95/100</span>
+            </summary>
+            <div class="lh-metric-body">
+              <p class="lh-metric-desc">Keep TypeScript functions concise (target &lt;= 110 lines) across src/ modules.</p>
+              <div class="lh-items">
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/launch.ts</code>
+                <span class="lh-item-val">104</span>
+                <span class="lh-item-target">Target: &lt;= 110</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/commands.ts</code>
+                <span class="lh-item-val">87</span>
+                <span class="lh-item-target">Target: &lt;= 110</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/auth.ts</code>
+                <span class="lh-item-val">79</span>
+                <span class="lh-item-target">Target: &lt;= 110</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/http.ts</code>
+                <span class="lh-item-val">77</span>
+                <span class="lh-item-target">Target: &lt;= 110</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/download.ts</code>
+                <span class="lh-item-val">72</span>
+                <span class="lh-item-target">Target: &lt;= 110</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/plugins.ts</code>
+                <span class="lh-item-val">64</span>
+                <span class="lh-item-target">Target: &lt;= 110</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/triggers.ts</code>
+                <span class="lh-item-val">63</span>
+                <span class="lh-item-target">Target: &lt;= 110</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/cli.ts</code>
+                <span class="lh-item-val">54</span>
+                <span class="lh-item-target">Target: &lt;= 110</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/jev.ts</code>
+                <span class="lh-item-val">40</span>
+                <span class="lh-item-target">Target: &lt;= 110</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/browser.ts</code>
+                <span class="lh-item-val">32</span>
+                <span class="lh-item-target">Target: &lt;= 110</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/smithers-runtime.ts</code>
+                <span class="lh-item-val">30</span>
+                <span class="lh-item-target">Target: &lt;= 110</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/agent-bridge.ts</code>
+                <span class="lh-item-val">25</span>
+                <span class="lh-item-target">Target: &lt;= 110</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/native.ts</code>
+                <span class="lh-item-val">18</span>
+                <span class="lh-item-target">Target: &lt;= 110</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/runtime.ts</code>
+                <span class="lh-item-val">6</span>
+                <span class="lh-item-target">Target: &lt;= 110</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/index.ts</code>
+                <span class="lh-item-val">1</span>
+                <span class="lh-item-target">Target: &lt;= 110</span>
+                
+              </div></div>
+            </div>
+          </details></div>
+      </section>
+
+      <section class="lh-category" id="cat-mcp-security">
+        <div class="lh-cat-head">
+          
+    <svg class="lh-gauge-svg" width="64" height="64" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="rgba(255,255,255,0.08)" stroke-width="7" />
+      <circle cx="50" cy="50" r="42" fill="none" stroke="#0cce6b" stroke-width="7"
+        stroke-linecap="round"
+        stroke-dasharray="263.89"
+        stroke-dashoffset="0.00"
+        transform="rotate(-90 50 50)" />
+      <text x="50" y="55" text-anchor="middle" fill="#0cce6b" font-size="27" font-weight="700" font-family="var(--mono)">100</text>
+    </svg>
+          <div>
+            <h2>MCP Security &amp; Trust</h2>
+            <p>Enforce loopback defaults, timing-safe one-time auth tokens, untrusted execution isolation, and protected factory paths.</p>
+          </div>
+          <span class="lh-cat-badge lh-pass">100 / 100</span>
+        </div>
+        <div class="lh-metric-list">
+          <details class="lh-metric" data-tier="pass" >
+            <summary class="lh-metric-summary">
+              <span class="lh-status-dot lh-dot-pass" aria-label="Passing"></span>
+              <span class="lh-metric-name">Loopback and timing safe</span>
+              <span class="lh-metric-weight">w=2</span>
+              <span class="lh-metric-score lh-pass">100/100</span>
+            </summary>
+            <div class="lh-metric-body">
+              <p class="lh-metric-desc">Default HTTP MCP listener to loopback, require token for non-loopback binds, and verify tokens with timingSafeEqual.</p>
+              <div class="lh-items">
+              <div class="lh-item-row ">
+                <code class="lh-item-name">http-mcp-boundary</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div></div>
+            </div>
+          </details>
+
+          <details class="lh-metric" data-tier="pass" >
+            <summary class="lh-metric-summary">
+              <span class="lh-status-dot lh-dot-pass" aria-label="Passing"></span>
+              <span class="lh-metric-name">One time sandbox auth</span>
+              <span class="lh-metric-weight">w=2</span>
+              <span class="lh-metric-score lh-pass">100/100</span>
+            </summary>
+            <div class="lh-metric-body">
+              <p class="lh-metric-desc">Support single-use one-time authentication tokens for sandboxes and agents with replay rejection and TTL expiry.</p>
+              <div class="lh-items">
+              <div class="lh-item-row ">
+                <code class="lh-item-name">sandbox-ott</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div></div>
+            </div>
+          </details>
+
+          <details class="lh-metric" data-tier="pass" >
+            <summary class="lh-metric-summary">
+              <span class="lh-status-dot lh-dot-pass" aria-label="Passing"></span>
+              <span class="lh-metric-name">Protected factory paths</span>
+              <span class="lh-metric-weight">w=2</span>
+              <span class="lh-metric-score lh-pass">100/100</span>
+            </summary>
+            <div class="lh-metric-body">
+              <p class="lh-metric-desc">Declare protectedPaths and maintainers in .smithers/FACTORY.ts so untrusted changes cannot rewrite CI or factory trust roots.</p>
+              <div class="lh-items">
+              <div class="lh-item-row ">
+                <code class="lh-item-name">.smithers/FACTORY.ts</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div></div>
+            </div>
+          </details>
+
+          <details class="lh-metric" data-tier="pass" >
+            <summary class="lh-metric-summary">
+              <span class="lh-status-dot lh-dot-pass" aria-label="Passing"></span>
+              <span class="lh-metric-name">Untrusted cache isolation</span>
+              <span class="lh-metric-weight">w=2</span>
+              <span class="lh-metric-score lh-pass">100/100</span>
+            </summary>
+            <div class="lh-metric-body">
+              <p class="lh-metric-desc">Restrict untrusted/fork CI runs to read-only Smithers Cloud object store cache access so untrusted runs cannot poison the cache.</p>
+              <div class="lh-items">
+              <div class="lh-item-row ">
+                <code class="lh-item-name">.github/workflows/ci.yml</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div></div>
+            </div>
+          </details></div>
+      </section>
+
+      <section class="lh-category" id="cat-testing-and-fuzz">
+        <div class="lh-cat-head">
+          
+    <svg class="lh-gauge-svg" width="64" height="64" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="rgba(255,255,255,0.08)" stroke-width="7" />
+      <circle cx="50" cy="50" r="42" fill="none" stroke="#0cce6b" stroke-width="7"
+        stroke-linecap="round"
+        stroke-dasharray="263.89"
+        stroke-dashoffset="18.47"
+        transform="rotate(-90 50 50)" />
+      <text x="50" y="55" text-anchor="middle" fill="#0cce6b" font-size="27" font-weight="700" font-family="var(--mono)">93</text>
+    </svg>
+          <div>
+            <h2>Testing &amp; Fuzzing</h2>
+            <p>Maintain high test-to-source ratio, fuzz boundary coverage, and compiled-fork acceptance suites.</p>
+          </div>
+          <span class="lh-cat-badge lh-pass">93 / 100</span>
+        </div>
+        <div class="lh-metric-list">
+          <details class="lh-metric" data-tier="pass" >
+            <summary class="lh-metric-summary">
+              <span class="lh-status-dot lh-dot-pass" aria-label="Passing"></span>
+              <span class="lh-metric-name">Test to src ratio</span>
+              <span class="lh-metric-weight">w=2</span>
+              <span class="lh-metric-score lh-pass">92/100</span>
+            </summary>
+            <div class="lh-metric-body">
+              <p class="lh-metric-desc">Maintain at least 55% test-to-source line ratio across tests/ vs src/ + native/.</p>
+              <div class="lh-items">
+              <div class="lh-item-row ">
+                <code class="lh-item-name">dub</code>
+                <span class="lh-item-val">63</span>
+                <span class="lh-item-target">Target: &gt;= 55</span>
+                <span class="lh-item-note">63% (3147 test lines / 5011 src+native lines)</span>
+              </div></div>
+            </div>
+          </details>
+
+          <details class="lh-metric" data-tier="pass" >
+            <summary class="lh-metric-summary">
+              <span class="lh-status-dot lh-dot-pass" aria-label="Passing"></span>
+              <span class="lh-metric-name">Fuzz tests</span>
+              <span class="lh-metric-weight">w=2</span>
+              <span class="lh-metric-score lh-pass">90/100</span>
+            </summary>
+            <div class="lh-metric-body">
+              <p class="lh-metric-desc">Keep broad fuzz coverage across N-API framing, HTTP boundaries, SHA-256 installer, durations, and one-time auth.</p>
+              <div class="lh-items">
+              <div class="lh-item-row ">
+                <code class="lh-item-name">tests/fuzz.test.mjs</code>
+                <span class="lh-item-val">5</span>
+                <span class="lh-item-target">Target: &gt;= 5</span>
+                
+              </div></div>
+            </div>
+          </details>
+
+          <details class="lh-metric" data-tier="pass" >
+            <summary class="lh-metric-summary">
+              <span class="lh-status-dot lh-dot-pass" aria-label="Passing"></span>
+              <span class="lh-metric-name">Unit tests</span>
+              <span class="lh-metric-weight">w=2</span>
+              <span class="lh-metric-score lh-pass">96/100</span>
+            </summary>
+            <div class="lh-metric-body">
+              <p class="lh-metric-desc">Maintain comprehensive unit, bridge, MCP, auth, trigger, and plugin test coverage across tests/*.test.mjs.</p>
+              <div class="lh-items">
+              <div class="lh-item-row ">
+                <code class="lh-item-name">tests/*.test.mjs</code>
+                <span class="lh-item-val">37</span>
+                <span class="lh-item-target">Target: &gt;= 25</span>
+                
+              </div></div>
+            </div>
+          </details>
+
+          <details class="lh-metric" data-tier="pass" >
+            <summary class="lh-metric-summary">
+              <span class="lh-status-dot lh-dot-pass" aria-label="Passing"></span>
+              <span class="lh-metric-name">Browser acceptance suites</span>
+              <span class="lh-metric-weight">w=1</span>
+              <span class="lh-metric-score lh-pass">92/100</span>
+            </summary>
+            <div class="lh-metric-body">
+              <p class="lh-metric-desc">Cover every milestone (Stage A + Milestones 1-4) with real-browser acceptance test suites under tests/browser/.</p>
+              <div class="lh-items">
+              <div class="lh-item-row ">
+                <code class="lh-item-name">tests/browser</code>
+                <span class="lh-item-val">6</span>
+                <span class="lh-item-target">Target: &gt;= 5</span>
+                
+              </div></div>
+            </div>
+          </details></div>
+      </section>
+
+      <section class="lh-category" id="cat-docs-and-footprint">
+        <div class="lh-cat-head">
+          
+    <svg class="lh-gauge-svg" width="64" height="64" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="rgba(255,255,255,0.08)" stroke-width="7" />
+      <circle cx="50" cy="50" r="42" fill="none" stroke="#0cce6b" stroke-width="7"
+        stroke-linecap="round"
+        stroke-dasharray="263.89"
+        stroke-dashoffset="0.00"
+        transform="rotate(-90 50 50)" />
+      <text x="50" y="55" text-anchor="middle" fill="#0cce6b" font-size="27" font-weight="700" font-family="var(--mono)">100</text>
+    </svg>
+          <div>
+            <h2>Docs, Wiki &amp; Footprint</h2>
+            <p>Keep prebuilt N-API binaries lean, markdown links valid, and public wiki, mythical history, and llms.txt current.</p>
+          </div>
+          <span class="lh-cat-badge lh-pass">100 / 100</span>
+        </div>
+        <div class="lh-metric-list">
+          <details class="lh-metric" data-tier="pass" >
+            <summary class="lh-metric-summary">
+              <span class="lh-status-dot lh-dot-pass" aria-label="Passing"></span>
+              <span class="lh-metric-name">Prebuild size</span>
+              <span class="lh-metric-weight">w=1</span>
+              <span class="lh-metric-score lh-pass">99/100</span>
+            </summary>
+            <div class="lh-metric-body">
+              <p class="lh-metric-desc">Keep each prebuilt dub.node N-API binary under 160 kB.</p>
+              <div class="lh-items">
+              <div class="lh-item-row ">
+                <code class="lh-item-name">prebuilds/darwin-arm64/dub.node</code>
+                <span class="lh-item-val">59.3 kB</span>
+                <span class="lh-item-target">Target: &lt;= 160.0 kB</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">prebuilds/linux-x64/dub.node</code>
+                <span class="lh-item-val">44.4 kB</span>
+                <span class="lh-item-target">Target: &lt;= 160.0 kB</span>
+                
+              </div></div>
+            </div>
+          </details>
+
+          <details class="lh-metric" data-tier="pass" >
+            <summary class="lh-metric-summary">
+              <span class="lh-status-dot lh-dot-pass" aria-label="Passing"></span>
+              <span class="lh-metric-name">Markdown links</span>
+              <span class="lh-metric-weight">w=2</span>
+              <span class="lh-metric-score lh-pass">100/100</span>
+            </summary>
+            <div class="lh-metric-body">
+              <p class="lh-metric-desc">Keep all relative Markdown links across README.md, docs/, and .smithers/wiki/ resolving to existing files.</p>
+              <div class="lh-items">
+              <div class="lh-item-row ">
+                <code class="lh-item-name">docs+wiki</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div></div>
+            </div>
+          </details>
+
+          <details class="lh-metric" data-tier="pass" >
+            <summary class="lh-metric-summary">
+              <span class="lh-status-dot lh-dot-pass" aria-label="Passing"></span>
+              <span class="lh-metric-name">Factory knowledge</span>
+              <span class="lh-metric-weight">w=2</span>
+              <span class="lh-metric-score lh-pass">100/100</span>
+            </summary>
+            <div class="lh-metric-body">
+              <p class="lh-metric-desc">Keep .smithers/wiki/, mythical-history.md, .smithers/home.json, and site/llms.txt present and valid.</p>
+              <div class="lh-items">
+              <div class="lh-item-row ">
+                <code class="lh-item-name">knowledge-graph</code>
+                <span class="lh-item-val">PASS</span>
+                <span class="lh-item-target">Target: PASS</span>
+                
+              </div></div>
+            </div>
+          </details></div>
+      </section>
+
+      <details class="lh-raw-receipt">
+        <summary>Inspect raw Uphill JSON receipt (.uphill/report.json)</summary>
+        <pre>{
+  &quot;version&quot;: 1,
+  &quot;categories&quot;: [
+    {
+      &quot;name&quot;: &quot;bridge-safety&quot;,
+      &quot;title&quot;: &quot;Native Bridge &amp; Seam Safety&quot;,
+      &quot;subject&quot;: null,
+      &quot;description&quot;: &quot;Protect the C++20 N-API bridge, Chromium 157 overlay patches, and public repository hygiene.&quot;,
+      &quot;score&quot;: 100,
+      &quot;rounds&quot;: 1,
+      &quot;metrics&quot;: [
+        {
+          &quot;name&quot;: &quot;cpp-no-abort&quot;,
+          &quot;title&quot;: &quot;Cpp no abort&quot;,
+          &quot;description&quot;: &quot;Never call abort(), exit(), or std::terminate() in native/ C++ addon code; return typed N-API errors instead.&quot;,
+          &quot;kind&quot;: &quot;check&quot;,
+          &quot;unit&quot;: null,
+          &quot;value&quot;: 1,
+          &quot;item&quot;: null,
+          &quot;score&quot;: 100,
+          &quot;target&quot;: null,
+          &quot;default&quot;: null,
+          &quot;note&quot;: null,
+          &quot;better&quot;: &quot;lower&quot;,
+          &quot;weight&quot;: 2,
+          &quot;rollup&quot;: null,
+          &quot;items&quot;: [
+            {
+              &quot;name&quot;: &quot;native&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            }
+          ]
+        },
+        {
+          &quot;name&quot;: &quot;cpp-strict-flags&quot;,
+          &quot;title&quot;: &quot;Cpp strict flags&quot;,
+          &quot;description&quot;: &quot;Compile native/ with -std=c++20, -Wall, -Wextra, -Werror, and -DNAPI_VERSION=8.&quot;,
+          &quot;kind&quot;: &quot;check&quot;,
+          &quot;unit&quot;: null,
+          &quot;value&quot;: 1,
+          &quot;item&quot;: null,
+          &quot;score&quot;: 100,
+          &quot;target&quot;: null,
+          &quot;default&quot;: null,
+          &quot;note&quot;: null,
+          &quot;better&quot;: &quot;lower&quot;,
+          &quot;weight&quot;: 1,
+          &quot;rollup&quot;: null,
+          &quot;items&quot;: [
+            {
+              &quot;name&quot;: &quot;build-native.mjs&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            }
+          ]
+        },
+        {
+          &quot;name&quot;: &quot;overlay-integrity&quot;,
+          &quot;title&quot;: &quot;Overlay integrity&quot;,
+          &quot;description&quot;: &quot;Keep chromium/revision.json pinned, all unified patches valid, and overlay files non-empty and leak-free.&quot;,
+          &quot;kind&quot;: &quot;check&quot;,
+          &quot;unit&quot;: null,
+          &quot;value&quot;: 1,
+          &quot;item&quot;: null,
+          &quot;score&quot;: 100,
+          &quot;target&quot;: null,
+          &quot;default&quot;: null,
+          &quot;note&quot;: null,
+          &quot;better&quot;: &quot;lower&quot;,
+          &quot;weight&quot;: 2,
+          &quot;rollup&quot;: null,
+          &quot;items&quot;: [
+            {
+              &quot;name&quot;: &quot;chromium-157&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            }
+          ]
+        },
+        {
+          &quot;name&quot;: &quot;no-private-leaks&quot;,
+          &quot;title&quot;: &quot;No private leaks&quot;,
+          &quot;description&quot;: &quot;Never commit private infrastructure hostnames, local user paths, or internal codenames into public files.&quot;,
+          &quot;kind&quot;: &quot;check&quot;,
+          &quot;unit&quot;: null,
+          &quot;value&quot;: 1,
+          &quot;item&quot;: null,
+          &quot;score&quot;: 100,
+          &quot;target&quot;: null,
+          &quot;default&quot;: null,
+          &quot;note&quot;: null,
+          &quot;better&quot;: &quot;lower&quot;,
+          &quot;weight&quot;: 2,
+          &quot;rollup&quot;: null,
+          &quot;items&quot;: [
+            {
+              &quot;name&quot;: &quot;public-tree&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      &quot;name&quot;: &quot;typescript-quality&quot;,
+      &quot;title&quot;: &quot;TypeScript Quality&quot;,
+      &quot;subject&quot;: null,
+      &quot;description&quot;: &quot;Enforce strict typing, zero compiler suppressions, clean stdout for MCP, and modular functions across src/.&quot;,
+      &quot;score&quot;: 99,
+      &quot;rounds&quot;: 1,
+      &quot;metrics&quot;: [
+        {
+          &quot;name&quot;: &quot;ts-no-explicit-any&quot;,
+          &quot;title&quot;: &quot;Ts no explicit any&quot;,
+          &quot;description&quot;: &quot;Avoid explicit `: any` or `as any` in production TypeScript modules under src/.&quot;,
+          &quot;kind&quot;: &quot;check&quot;,
+          &quot;unit&quot;: null,
+          &quot;value&quot;: 1,
+          &quot;item&quot;: null,
+          &quot;score&quot;: 100,
+          &quot;target&quot;: null,
+          &quot;default&quot;: null,
+          &quot;note&quot;: null,
+          &quot;better&quot;: &quot;lower&quot;,
+          &quot;weight&quot;: 2,
+          &quot;rollup&quot;: null,
+          &quot;items&quot;: [
+            {
+              &quot;name&quot;: &quot;src/agent-bridge.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/auth.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/browser.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/cli.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/commands.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/download.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/http.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/index.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/jev.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/launch.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/native.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/plugins.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/runtime.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/smithers-runtime.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/triggers.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            }
+          ]
+        },
+        {
+          &quot;name&quot;: &quot;ts-no-suppressions&quot;,
+          &quot;title&quot;: &quot;Ts no suppressions&quot;,
+          &quot;description&quot;: &quot;Eliminate @ts-ignore, @ts-expect-error, and @ts-nocheck directives in production src/ files.&quot;,
+          &quot;kind&quot;: &quot;check&quot;,
+          &quot;unit&quot;: null,
+          &quot;value&quot;: 1,
+          &quot;item&quot;: null,
+          &quot;score&quot;: 100,
+          &quot;target&quot;: null,
+          &quot;default&quot;: null,
+          &quot;note&quot;: null,
+          &quot;better&quot;: &quot;lower&quot;,
+          &quot;weight&quot;: 2,
+          &quot;rollup&quot;: null,
+          &quot;items&quot;: [
+            {
+              &quot;name&quot;: &quot;src/agent-bridge.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/auth.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/browser.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/cli.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/commands.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/download.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/http.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/index.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/jev.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/launch.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/native.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/plugins.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/runtime.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/smithers-runtime.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/triggers.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            }
+          ]
+        },
+        {
+          &quot;name&quot;: &quot;ts-no-console-log&quot;,
+          &quot;title&quot;: &quot;Ts no console log&quot;,
+          &quot;description&quot;: &quot;Never call console.log in library src/ modules so MCP stdio/HTTP streams stay uncorrupted.&quot;,
+          &quot;kind&quot;: &quot;check&quot;,
+          &quot;unit&quot;: null,
+          &quot;value&quot;: 1,
+          &quot;item&quot;: null,
+          &quot;score&quot;: 100,
+          &quot;target&quot;: null,
+          &quot;default&quot;: null,
+          &quot;note&quot;: null,
+          &quot;better&quot;: &quot;lower&quot;,
+          &quot;weight&quot;: 2,
+          &quot;rollup&quot;: null,
+          &quot;items&quot;: [
+            {
+              &quot;name&quot;: &quot;src/agent-bridge.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/auth.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/browser.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/cli.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/commands.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/download.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/http.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/index.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/jev.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/launch.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/native.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/plugins.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/runtime.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/smithers-runtime.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/triggers.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            }
+          ]
+        },
+        {
+          &quot;name&quot;: &quot;ts-max-fn-lines&quot;,
+          &quot;title&quot;: &quot;Ts max fn lines&quot;,
+          &quot;description&quot;: &quot;Keep TypeScript functions concise (target &lt;= 110 lines) across src/ modules.&quot;,
+          &quot;kind&quot;: &quot;count&quot;,
+          &quot;unit&quot;: null,
+          &quot;value&quot;: 87,
+          &quot;item&quot;: &quot;src/commands.ts&quot;,
+          &quot;score&quot;: 95,
+          &quot;target&quot;: 110,
+          &quot;default&quot;: 110,
+          &quot;note&quot;: null,
+          &quot;better&quot;: &quot;lower&quot;,
+          &quot;weight&quot;: 1,
+          &quot;rollup&quot;: &quot;p90&quot;,
+          &quot;items&quot;: [
+            {
+              &quot;name&quot;: &quot;src/launch.ts&quot;,
+              &quot;value&quot;: 104,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/commands.ts&quot;,
+              &quot;value&quot;: 87,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/auth.ts&quot;,
+              &quot;value&quot;: 79,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/http.ts&quot;,
+              &quot;value&quot;: 77,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/download.ts&quot;,
+              &quot;value&quot;: 72,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/plugins.ts&quot;,
+              &quot;value&quot;: 64,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/triggers.ts&quot;,
+              &quot;value&quot;: 63,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/cli.ts&quot;,
+              &quot;value&quot;: 54,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/jev.ts&quot;,
+              &quot;value&quot;: 40,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/browser.ts&quot;,
+              &quot;value&quot;: 32,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/smithers-runtime.ts&quot;,
+              &quot;value&quot;: 30,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/agent-bridge.ts&quot;,
+              &quot;value&quot;: 25,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/native.ts&quot;,
+              &quot;value&quot;: 18,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/runtime.ts&quot;,
+              &quot;value&quot;: 6,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/index.ts&quot;,
+              &quot;value&quot;: 1,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      &quot;name&quot;: &quot;mcp-security&quot;,
+      &quot;title&quot;: &quot;MCP Security &amp; Trust&quot;,
+      &quot;subject&quot;: null,
+      &quot;description&quot;: &quot;Enforce loopback defaults, timing-safe one-time auth tokens, untrusted execution isolation, and protected factory paths.&quot;,
+      &quot;score&quot;: 100,
+      &quot;rounds&quot;: 1,
+      &quot;metrics&quot;: [
+        {
+          &quot;name&quot;: &quot;loopback-and-timing-safe&quot;,
+          &quot;title&quot;: &quot;Loopback and timing safe&quot;,
+          &quot;description&quot;: &quot;Default HTTP MCP listener to loopback, require token for non-loopback binds, and verify tokens with timingSafeEqual.&quot;,
+          &quot;kind&quot;: &quot;check&quot;,
+          &quot;unit&quot;: null,
+          &quot;value&quot;: 1,
+          &quot;item&quot;: null,
+          &quot;score&quot;: 100,
+          &quot;target&quot;: null,
+          &quot;default&quot;: null,
+          &quot;note&quot;: null,
+          &quot;better&quot;: &quot;lower&quot;,
+          &quot;weight&quot;: 2,
+          &quot;rollup&quot;: null,
+          &quot;items&quot;: [
+            {
+              &quot;name&quot;: &quot;http-mcp-boundary&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            }
+          ]
+        },
+        {
+          &quot;name&quot;: &quot;one-time-sandbox-auth&quot;,
+          &quot;title&quot;: &quot;One time sandbox auth&quot;,
+          &quot;description&quot;: &quot;Support single-use one-time authentication tokens for sandboxes and agents with replay rejection and TTL expiry.&quot;,
+          &quot;kind&quot;: &quot;check&quot;,
+          &quot;unit&quot;: null,
+          &quot;value&quot;: 1,
+          &quot;item&quot;: null,
+          &quot;score&quot;: 100,
+          &quot;target&quot;: null,
+          &quot;default&quot;: null,
+          &quot;note&quot;: null,
+          &quot;better&quot;: &quot;lower&quot;,
+          &quot;weight&quot;: 2,
+          &quot;rollup&quot;: null,
+          &quot;items&quot;: [
+            {
+              &quot;name&quot;: &quot;sandbox-ott&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            }
+          ]
+        },
+        {
+          &quot;name&quot;: &quot;protected-factory-paths&quot;,
+          &quot;title&quot;: &quot;Protected factory paths&quot;,
+          &quot;description&quot;: &quot;Declare protectedPaths and maintainers in .smithers/FACTORY.ts so untrusted changes cannot rewrite CI or factory trust roots.&quot;,
+          &quot;kind&quot;: &quot;check&quot;,
+          &quot;unit&quot;: null,
+          &quot;value&quot;: 1,
+          &quot;item&quot;: null,
+          &quot;score&quot;: 100,
+          &quot;target&quot;: null,
+          &quot;default&quot;: null,
+          &quot;note&quot;: null,
+          &quot;better&quot;: &quot;lower&quot;,
+          &quot;weight&quot;: 2,
+          &quot;rollup&quot;: null,
+          &quot;items&quot;: [
+            {
+              &quot;name&quot;: &quot;.smithers/FACTORY.ts&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            }
+          ]
+        },
+        {
+          &quot;name&quot;: &quot;untrusted-cache-isolation&quot;,
+          &quot;title&quot;: &quot;Untrusted cache isolation&quot;,
+          &quot;description&quot;: &quot;Restrict untrusted/fork CI runs to read-only Smithers Cloud object store cache access so untrusted runs cannot poison the cache.&quot;,
+          &quot;kind&quot;: &quot;check&quot;,
+          &quot;unit&quot;: null,
+          &quot;value&quot;: 1,
+          &quot;item&quot;: null,
+          &quot;score&quot;: 100,
+          &quot;target&quot;: null,
+          &quot;default&quot;: null,
+          &quot;note&quot;: null,
+          &quot;better&quot;: &quot;lower&quot;,
+          &quot;weight&quot;: 2,
+          &quot;rollup&quot;: null,
+          &quot;items&quot;: [
+            {
+              &quot;name&quot;: &quot;.github/workflows/ci.yml&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      &quot;name&quot;: &quot;testing-and-fuzz&quot;,
+      &quot;title&quot;: &quot;Testing &amp; Fuzzing&quot;,
+      &quot;subject&quot;: null,
+      &quot;description&quot;: &quot;Maintain high test-to-source ratio, fuzz boundary coverage, and compiled-fork acceptance suites.&quot;,
+      &quot;score&quot;: 93,
+      &quot;rounds&quot;: 1,
+      &quot;metrics&quot;: [
+        {
+          &quot;name&quot;: &quot;test-to-src-ratio&quot;,
+          &quot;title&quot;: &quot;Test to src ratio&quot;,
+          &quot;description&quot;: &quot;Maintain at least 55% test-to-source line ratio across tests/ vs src/ + native/.&quot;,
+          &quot;kind&quot;: &quot;count&quot;,
+          &quot;unit&quot;: null,
+          &quot;value&quot;: 63,
+          &quot;item&quot;: &quot;dub&quot;,
+          &quot;score&quot;: 92,
+          &quot;target&quot;: 55,
+          &quot;default&quot;: 55,
+          &quot;note&quot;: null,
+          &quot;better&quot;: &quot;higher&quot;,
+          &quot;weight&quot;: 2,
+          &quot;rollup&quot;: &quot;p10&quot;,
+          &quot;items&quot;: [
+            {
+              &quot;name&quot;: &quot;dub&quot;,
+              &quot;value&quot;: 63,
+              &quot;target&quot;: null,
+              &quot;note&quot;: &quot;63% (3147 test lines / 5011 src+native lines)&quot;
+            }
+          ]
+        },
+        {
+          &quot;name&quot;: &quot;fuzz-tests&quot;,
+          &quot;title&quot;: &quot;Fuzz tests&quot;,
+          &quot;description&quot;: &quot;Keep broad fuzz coverage across N-API framing, HTTP boundaries, SHA-256 installer, durations, and one-time auth.&quot;,
+          &quot;kind&quot;: &quot;count&quot;,
+          &quot;unit&quot;: null,
+          &quot;value&quot;: 5,
+          &quot;item&quot;: &quot;tests/fuzz.test.mjs&quot;,
+          &quot;score&quot;: 90,
+          &quot;target&quot;: 5,
+          &quot;default&quot;: 5,
+          &quot;note&quot;: null,
+          &quot;better&quot;: &quot;higher&quot;,
+          &quot;weight&quot;: 2,
+          &quot;rollup&quot;: &quot;p10&quot;,
+          &quot;items&quot;: [
+            {
+              &quot;name&quot;: &quot;tests/fuzz.test.mjs&quot;,
+              &quot;value&quot;: 5,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            }
+          ]
+        },
+        {
+          &quot;name&quot;: &quot;unit-tests&quot;,
+          &quot;title&quot;: &quot;Unit tests&quot;,
+          &quot;description&quot;: &quot;Maintain comprehensive unit, bridge, MCP, auth, trigger, and plugin test coverage across tests/*.test.mjs.&quot;,
+          &quot;kind&quot;: &quot;count&quot;,
+          &quot;unit&quot;: null,
+          &quot;value&quot;: 37,
+          &quot;item&quot;: &quot;tests/*.test.mjs&quot;,
+          &quot;score&quot;: 96,
+          &quot;target&quot;: 25,
+          &quot;default&quot;: 25,
+          &quot;note&quot;: null,
+          &quot;better&quot;: &quot;higher&quot;,
+          &quot;weight&quot;: 2,
+          &quot;rollup&quot;: &quot;p10&quot;,
+          &quot;items&quot;: [
+            {
+              &quot;name&quot;: &quot;tests/*.test.mjs&quot;,
+              &quot;value&quot;: 37,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            }
+          ]
+        },
+        {
+          &quot;name&quot;: &quot;browser-acceptance-suites&quot;,
+          &quot;title&quot;: &quot;Browser acceptance suites&quot;,
+          &quot;description&quot;: &quot;Cover every milestone (Stage A + Milestones 1-4) with real-browser acceptance test suites under tests/browser/.&quot;,
+          &quot;kind&quot;: &quot;count&quot;,
+          &quot;unit&quot;: null,
+          &quot;value&quot;: 6,
+          &quot;item&quot;: &quot;tests/browser&quot;,
+          &quot;score&quot;: 92,
+          &quot;target&quot;: 5,
+          &quot;default&quot;: 5,
+          &quot;note&quot;: null,
+          &quot;better&quot;: &quot;higher&quot;,
+          &quot;weight&quot;: 1,
+          &quot;rollup&quot;: &quot;p10&quot;,
+          &quot;items&quot;: [
+            {
+              &quot;name&quot;: &quot;tests/browser&quot;,
+              &quot;value&quot;: 6,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            }
+          ]
+        }
+      ]
+    },
+    {
+      &quot;name&quot;: &quot;docs-and-footprint&quot;,
+      &quot;title&quot;: &quot;Docs, Wiki &amp; Footprint&quot;,
+      &quot;subject&quot;: null,
+      &quot;description&quot;: &quot;Keep prebuilt N-API binaries lean, markdown links valid, and public wiki, mythical history, and llms.txt current.&quot;,
+      &quot;score&quot;: 100,
+      &quot;rounds&quot;: 1,
+      &quot;metrics&quot;: [
+        {
+          &quot;name&quot;: &quot;prebuild-size&quot;,
+          &quot;title&quot;: &quot;Prebuild size&quot;,
+          &quot;description&quot;: &quot;Keep each prebuilt dub.node N-API binary under 160 kB.&quot;,
+          &quot;kind&quot;: &quot;size&quot;,
+          &quot;unit&quot;: &quot;B&quot;,
+          &quot;value&quot;: 59300,
+          &quot;item&quot;: &quot;prebuilds/darwin-arm64/dub.node&quot;,
+          &quot;score&quot;: 99,
+          &quot;target&quot;: 160000,
+          &quot;default&quot;: 160000,
+          &quot;note&quot;: null,
+          &quot;better&quot;: &quot;lower&quot;,
+          &quot;weight&quot;: 1,
+          &quot;rollup&quot;: &quot;p90&quot;,
+          &quot;items&quot;: [
+            {
+              &quot;name&quot;: &quot;prebuilds/darwin-arm64/dub.node&quot;,
+              &quot;value&quot;: 59300,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;prebuilds/linux-x64/dub.node&quot;,
+              &quot;value&quot;: 44400,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            }
+          ]
+        },
+        {
+          &quot;name&quot;: &quot;markdown-links&quot;,
+          &quot;title&quot;: &quot;Markdown links&quot;,
+          &quot;description&quot;: &quot;Keep all relative Markdown links across README.md, docs/, and .smithers/wiki/ resolving to existing files.&quot;,
+          &quot;kind&quot;: &quot;check&quot;,
+          &quot;unit&quot;: null,
+          &quot;value&quot;: 1,
+          &quot;item&quot;: null,
+          &quot;score&quot;: 100,
+          &quot;target&quot;: null,
+          &quot;default&quot;: null,
+          &quot;note&quot;: null,
+          &quot;better&quot;: &quot;lower&quot;,
+          &quot;weight&quot;: 2,
+          &quot;rollup&quot;: null,
+          &quot;items&quot;: [
+            {
+              &quot;name&quot;: &quot;docs+wiki&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            }
+          ]
+        },
+        {
+          &quot;name&quot;: &quot;factory-knowledge&quot;,
+          &quot;title&quot;: &quot;Factory knowledge&quot;,
+          &quot;description&quot;: &quot;Keep .smithers/wiki/, mythical-history.md, .smithers/home.json, and site/llms.txt present and valid.&quot;,
+          &quot;kind&quot;: &quot;check&quot;,
+          &quot;unit&quot;: null,
+          &quot;value&quot;: 1,
+          &quot;item&quot;: null,
+          &quot;score&quot;: 100,
+          &quot;target&quot;: null,
+          &quot;default&quot;: null,
+          &quot;note&quot;: null,
+          &quot;better&quot;: &quot;lower&quot;,
+          &quot;weight&quot;: 2,
+          &quot;rollup&quot;: null,
+          &quot;items&quot;: [
+            {
+              &quot;name&quot;: &quot;knowledge-graph&quot;,
+              &quot;value&quot;: true,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  &quot;opportunities&quot;: [],
+  &quot;changes&quot;: [],
+  &quot;comparison&quot;: null
+}</pre>
+      </details>
+    </main>
+
+    <footer>
+      <span>Generated by <code>uphill</code> + <code>scripts/build-audit-report.mjs</code></span>
+      <span><a href="https://smithers.sh/smithersai/dangerouslyusebrowser">smithers.sh/smithersai/dangerouslyusebrowser</a></span>
+    </footer>
+  </div>
+
+  <script>
+    (function () {
+      const buttons = Array.from(document.querySelectorAll('.lh-filter-btn'));
+      const metrics = Array.from(document.querySelectorAll('.lh-metric'));
+      buttons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const filter = btn.dataset.filter;
+          buttons.forEach(b => b.classList.toggle('active', b === btn));
+          metrics.forEach(m => {
+            const tier = m.dataset.tier;
+            const show = filter === 'all' || (filter === 'pass' ? tier === 'pass' : tier !== 'pass');
+            m.style.display = show ? '' : 'none';
+          });
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

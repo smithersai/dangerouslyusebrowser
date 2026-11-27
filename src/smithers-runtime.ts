@@ -94,8 +94,14 @@ export class SmithersCodeRuntime {
     const add = (name: string, description: string, handler: CodeFlowHandler) => {
       map.set(name, { name, description, handler });
     };
+    this.registerTabPageFlows(add);
+    this.registerNetClockFlows(add);
+    this.registerControlAgentFlows(add);
+    for (const [k, v] of this.extraFlows) map.set(k, v);
+    return map;
+  }
 
-    // Browser control flows exposed to QuickJS cells via ctx.call(...)
+  private registerTabPageFlows(add: (name: string, description: string, handler: CodeFlowHandler) => void): void {
     add('dub.status', 'Get running Dub browser info and capabilities', () => this.browser.info());
     add('dub.tabs.list', 'List all tabs with stable IDs', () => this.browser.tabs());
     add('dub.tabs.open', 'Open a tab: { url, waitUntil?, ephemeral? }', i =>
@@ -116,7 +122,6 @@ export class SmithersCodeRuntime {
     add('dub.tabs.reload', 'Reload a tab: { tab, ignoreCache?, waitUntil? }', i =>
       this.browser.reload(Number(i.tab), { ignoreCache: Boolean(i.ignoreCache) })
     );
-
     add('dub.frames.list', 'List frames in a tab: { tab }', i => this.browser.frames(Number(i.tab)));
     add('dub.page.evaluate', 'Evaluate JS in a tab/frame: { tab, expression, frameId?, world? }', i =>
       this.browser.evaluate(Number(i.tab), String(i.expression), {
@@ -153,12 +158,13 @@ export class SmithersCodeRuntime {
     add('dub.page.emulate', 'Emulate userAgent, colorScheme, locale, geolocation, or randomSeed: { tab, ... }', i =>
       this.browser.emulate(Number(i.tab), i as never)
     );
-
     add('dub.tools.list', 'List native actor & WebMCP tools: { tab }', i => this.browser.tools(Number(i.tab)));
     add('dub.tools.call', 'Invoke a native actor or WebMCP tool: { tab, name, input? }', i =>
       this.browser.tool(Number(i.tab), String(i.name), (i.input as Record<string, unknown>) ?? {})
     );
+  }
 
+  private registerNetClockFlows(add: (name: string, description: string, handler: CodeFlowHandler) => void): void {
     add('dub.net.set', 'Set a live network rule: { match, action, ... }', i =>
       this.browser.setRule(i as unknown as NetworkRule)
     );
@@ -173,7 +179,6 @@ export class SmithersCodeRuntime {
     add('dub.net.config', 'Configure network body capture: { captureBodies?, maxBodyBytes? }', i =>
       this.browser.networkConfig(i as never)
     );
-
     add('dub.clock.freeze', 'Freeze per-tab virtual clock: { tab, at }', i =>
       this.browser.freeze(Number(i.tab), String(i.at))
     );
@@ -184,7 +189,6 @@ export class SmithersCodeRuntime {
       this.browser.step(Number(i.tab), Number(i.frames ?? 1))
     );
     add('dub.clock.resume', 'Resume real time: { tab }', i => this.browser.resume(Number(i.tab)));
-
     add('dub.cookies.list', 'List cookies: { url? }', i =>
       this.browser.cookies(i.url ? String(i.url) : undefined)
     );
@@ -196,7 +200,9 @@ export class SmithersCodeRuntime {
     add('dub.storage.import', 'Import cookies & web storage into a tab: { tab, state }', i =>
       this.browser.importStorage(Number(i.tab), (i.state as Record<string, unknown>) ?? {})
     );
+  }
 
+  private registerControlAgentFlows(add: (name: string, description: string, handler: CodeFlowHandler) => void): void {
     add('dub.dialog.policy', 'Get/set dialog policy: { mode?, promptText?, timeoutMs? }', i =>
       this.browser.dialogPolicy(i.mode ? (i as never) : undefined)
     );
@@ -212,13 +218,9 @@ export class SmithersCodeRuntime {
     );
     add('dub.scripts.remove', 'Remove an init script: { id }', i => this.browser.removeScript(String(i.id)));
     add('dub.scripts.list', 'List init scripts and exposed functions', () => this.browser.scripts());
-
-    // Smithers Jev decision model flow (typesafe-ai/jev via @smthrs/model/Evaluator)
     add('jev', 'Ask Jev (fast typed decision model) boolean/choice/score questions about a JSON state: { state, questions }', i =>
       this.jev.ask(i as unknown as JevAskInput)
     );
-
-    // BYO Agent callback flow: triggers a new turn of the user's configured agent (or MCP handoff)
     add('agent.turn', 'Trigger a new turn of the user BYO agent to inspect/decide/rewrite: { event?, prompt, payload?, timeoutMs? }', async i => {
       const response = await this.agent.runTurn({
         event: String(i.event ?? 'code.callback'),
@@ -226,7 +228,6 @@ export class SmithersCodeRuntime {
         payload: (i.payload as Record<string, unknown>) ?? {},
         timeoutMs: i.timeoutMs ? Number(i.timeoutMs) : 30000,
       });
-      // If the BYO agent replied with a Smithers code-mode cell, execute it automatically!
       if (response.code) {
         const sub = await this.evaluate(response.code, {
           realmId: `agent-turn-${Date.now()}`,
@@ -244,11 +245,6 @@ export class SmithersCodeRuntime {
       }
       return response;
     });
-
-    for (const [k, v] of this.extraFlows) {
-      map.set(k, v);
-    }
-    return map;
   }
 
   private async getSandbox(): Promise<SandboxInstance> {
@@ -306,18 +302,8 @@ export class SmithersCodeRuntime {
     return [...this.realms.entries()].map(([realmId, r]) => ({ realmId, frames: r.frame }));
   }
 
-  async evaluate(code: string, opts: CodeEvalOptions = {}): Promise<CodeEvalResult> {
-    const realmId = opts.realmId ?? 'default';
-    const flows = this.buildFlowMap();
-    const projections = this.buildProjections(flows);
-    const active = await this.getOrCreateRealm(realmId, projections);
-    active.frame += 1;
-
-    // Bind `event` if this cell is executing in response to a browser trigger.
-    const prefix = opts.event !== undefined ? `var event = ${JSON.stringify(opts.event)};\n` : '';
-    const source = Cell.source(`${prefix}${code}`, opts.language ?? 'typescript');
-
-    const callHandler: Sandbox.Handler = invocation =>
+  private createCallHandler(flows: Map<string, CodeFlowDescriptor>): Sandbox.Handler {
+    return invocation =>
       Effect.promise(async () => {
         const flow = flows.get(invocation.flow);
         if (!flow) {
@@ -335,10 +321,7 @@ export class SmithersCodeRuntime {
               : { value: invocation.input };
           const result = await flow.handler(inputObj);
           const safeJson = result === undefined ? null : JSON.parse(JSON.stringify(result));
-          return {
-            outcome: 'success',
-            value: safeJson as Schema.Json,
-          } as Cell.CallResult;
+          return { outcome: 'success', value: safeJson as Schema.Json } as Cell.CallResult;
         } catch (err) {
           return {
             outcome: 'failure',
@@ -348,24 +331,15 @@ export class SmithersCodeRuntime {
           } as Cell.CallResult;
         }
       });
+  }
 
-    const timeoutMs = Math.min(Math.max(opts.timeoutMs ?? 30_000, 500), 120_000);
-    const frameResult = await Effect.runPromise(
-      active.realm.evaluate({
-        cell: source,
-        flows: projections,
-        frame: active.frame,
-        call: callHandler,
-        limits: {
-          calls: opts.maxCalls ?? 64,
-          totalMs: timeoutMs,
-          callMs: Math.min(timeoutMs, 30_000),
-        },
-      })
-    );
-
+  private formatEvalResult(
+    realmId: string,
+    frame: number,
+    frameResult: { bindings: ReadonlyArray<{ name: string; type: string }>; prints: string; outcome: unknown }
+  ): CodeEvalResult {
     const bindings = frameResult.bindings.map(b => ({ name: b.name, type: b.type }));
-    const outcome = frameResult.outcome as unknown as Record<string, unknown>;
+    const outcome = frameResult.outcome as Record<string, unknown>;
     const tag = String(outcome._tag ?? '');
 
     if (tag === 'settled') {
@@ -375,7 +349,7 @@ export class SmithersCodeRuntime {
         return {
           ok: true,
           realmId,
-          frame: active.frame,
+          frame,
           outcome: 'done',
           output: transition?.value !== undefined ? transition.value : transition?.output,
           prints: frameResult.prints,
@@ -386,21 +360,14 @@ export class SmithersCodeRuntime {
         return {
           ok: true,
           realmId,
-          frame: active.frame,
+          frame,
           outcome: 'parked',
           output: { reason: transition?.reason, message: transition?.message },
           prints: frameResult.prints,
           bindings,
         };
       }
-      return {
-        ok: true,
-        realmId,
-        frame: active.frame,
-        outcome: 'continue',
-        prints: frameResult.prints,
-        bindings,
-      };
+      return { ok: true, realmId, frame, outcome: 'continue', prints: frameResult.prints, bindings };
     }
 
     if (tag === 'raised') {
@@ -408,21 +375,18 @@ export class SmithersCodeRuntime {
       return {
         ok: false,
         realmId,
-        frame: active.frame,
+        frame,
         outcome: 'raised',
         prints: frameResult.prints,
         bindings,
-        error: {
-          code: errObj?.name ?? 'Error',
-          message: errObj?.message ?? 'Cell threw an exception',
-        },
+        error: { code: errObj?.name ?? 'Error', message: errObj?.message ?? 'Cell threw an exception' },
       };
     }
 
     return {
       ok: false,
       realmId,
-      frame: active.frame,
+      frame,
       outcome: 'rejected',
       prints: frameResult.prints,
       bindings,
@@ -431,6 +395,33 @@ export class SmithersCodeRuntime {
         message: String(outcome.message ?? 'Cell was rejected by QuickJS sandbox'),
       },
     };
+  }
+
+  async evaluate(code: string, opts: CodeEvalOptions = {}): Promise<CodeEvalResult> {
+    const realmId = opts.realmId ?? 'default';
+    const flows = this.buildFlowMap();
+    const projections = this.buildProjections(flows);
+    const active = await this.getOrCreateRealm(realmId, projections);
+    active.frame += 1;
+
+    const prefix = opts.event !== undefined ? `var event = ${JSON.stringify(opts.event)};\n` : '';
+    const source = Cell.source(`${prefix}${code}`, opts.language ?? 'typescript');
+    const timeoutMs = Math.min(Math.max(opts.timeoutMs ?? 30_000, 500), 120_000);
+    const frameResult = await Effect.runPromise(
+      active.realm.evaluate({
+        cell: source,
+        flows: projections,
+        frame: active.frame,
+        call: this.createCallHandler(flows),
+        limits: {
+          calls: opts.maxCalls ?? 64,
+          totalMs: timeoutMs,
+          callMs: Math.min(timeoutMs, 30_000),
+        },
+      })
+    );
+
+    return this.formatEvalResult(realmId, active.frame, frameResult);
   }
 
   async close() {
