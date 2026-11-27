@@ -83,7 +83,20 @@ test('Knowledge graph, Mythical History, llms.txt, and Lighthouse audit UI are p
 
   const llmsTxt = readFileSync(resolve(root, 'site/llms.txt'), 'utf8');
   assert.match(llmsTxt, /https:\/\/dangerouslyusebrowser\.smithers\.sh\/docs\/start-here\.md/);
-  assert.match(llmsTxt, /https:\/\/dangerouslyusebrowser\.smithers\.sh\/audit/);
+  assert.match(llmsTxt, /https:\/\/dangerouslyusebrowser\.smithers\.sh\/docs\/lighthouse-audit\.md/);
+
+  // Every indexed page link in llms.txt MUST be a Markdown document so smithers.sh Docs tab never dumps raw HTML
+  const indexedUrls = [...llmsTxt.matchAll(/^- \[[^\]]+\]\((https?:\/\/[^)]+)\)/gm)].map(m => m[1]);
+  assert.ok(indexedUrls.length >= 12, `Expected >= 12 indexed docs in llms.txt, got ${indexedUrls.length}`);
+  for (const url of indexedUrls) {
+    assert.ok(url.endsWith('.md'), `llms.txt entry must point to a .md document, got ${url}`);
+  }
+
+  // home.json should use clean extensionless URLs (zero .html 307 redirects) and obey copy rules
+  const homeRaw = readFileSync(resolve(root, '.smithers/home.json'), 'utf8');
+  assert.equal(homeRaw.includes('.html'), false, '.smithers/home.json should link to extensionless paths');
+  assert.equal(homeRaw.includes('—'), false, '.smithers/home.json must not contain em dashes');
+  assert.equal(homeRaw.includes(';'), false, '.smithers/home.json must not contain semicolons');
 
   const auditHtml = readFileSync(resolve(root, 'site/audit.html'), 'utf8');
   assert.match(auditHtml, /Dub Lighthouse Audit Report/);

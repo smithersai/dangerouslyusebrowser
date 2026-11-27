@@ -7,17 +7,18 @@
   <meta name="description" content="Live Uphill Lighthouse-style backpressure audit report for Dub (smithersai/dangerouslyusebrowser).">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="styles.css">
+  <script src="theme.js"></script>
   <style>
     .lh-banner { margin-top: 26px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 26px 28px; }
     .lh-top { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; justify-content: space-between; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
     .lh-top h1 { margin: 4px 0 8px; font-size: 28px; }
     .lh-top p { margin: 0; color: var(--muted); max-width: 60ch; }
-    .lh-composite { display: flex; align-items: center; gap: 14px; background: rgba(255,255,255,0.025); border: 1px solid var(--line); border-radius: 14px; padding: 12px 18px; }
+    .lh-composite { display: flex; align-items: center; gap: 14px; background: var(--code-bg); border: 1px solid var(--line); border-radius: 14px; padding: 12px 18px; }
     .lh-composite-meta strong { display: block; font-size: 14px; color: var(--fg); }
     .lh-composite-meta span { display: block; font-size: 12px; color: var(--muted); }
     .lh-gauges { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; padding-top: 24px; }
-    .lh-gauge-card { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; text-decoration: none; padding: 16px 10px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255,255,255,0.02); transition: transform 0.15s, border-color 0.15s; }
-    .lh-gauge-card:hover { transform: translateY(-2px); border-color: rgba(255,255,255,0.22); }
+    .lh-gauge-card { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; text-decoration: none; padding: 16px 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); transition: transform 0.15s, border-color 0.15s; }
+    .lh-gauge-card:hover { transform: translateY(-2px); border-color: var(--subtle); }
     .lh-gauge-title { font-size: 13px; font-weight: 600; color: var(--fg); line-height: 1.3; }
     .lh-gauge-pill, .lh-cat-badge { font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
     .lh-pass { color: #0cce6b; background: rgba(12, 206, 107, 0.13); border: 1px solid rgba(12, 206, 107, 0.35); }
@@ -44,16 +45,21 @@
     .lh-opp-main strong { display: block; font-size: 13.5px; color: var(--fg); }
     .lh-opp-main span { font-size: 12px; color: var(--muted); }
     .lh-opp-delta { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 12px; }
-    .lh-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0 12px; }
+    .lh-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 24px 0 12px; }
     .lh-filter-btn { background: var(--surface); border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 6px 14px; font-size: 12.5px; cursor: pointer; }
     .lh-filter-btn.active { color: var(--fg); border-color: var(--accent, #f59e0b); background: rgba(245, 158, 11, 0.12); }
+    .lh-expand-btn { margin-left: auto; background: var(--surface); border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 6px 14px; font-size: 12px; font-family: var(--mono); cursor: pointer; }
+    .lh-expand-btn:hover { color: var(--fg); border-color: var(--subtle); }
+    .lh-repro-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); margin: 18px 0; font-size: 12.5px; }
+    .lh-repro-bar code { font-size: 12px; }
+    .lh-repro-links { margin-left: auto; display: flex; flex-wrap: wrap; gap: 12px; font-size: 12.5px; }
     .lh-category { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; margin-bottom: 18px; }
     .lh-cat-head { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
     .lh-cat-head h2 { margin: 0 0 4px; font-size: 19px; }
     .lh-cat-head p { margin: 0; font-size: 13px; color: var(--muted); }
     .lh-cat-badge { margin-left: auto; font-size: 13px; padding: 5px 12px; }
     .lh-metric-list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
-    .lh-metric { border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,0.015); overflow: hidden; }
+    .lh-metric { border: 1px solid var(--line); border-radius: 10px; background: var(--bg); overflow: hidden; }
     .lh-metric-summary { display: flex; align-items: center; gap: 10px; padding: 11px 14px; cursor: pointer; list-style: none; font-size: 13.5px; }
     .lh-metric-summary::-webkit-details-marker { display: none; }
     .lh-status-dot { width: 10px; height: 10px; border-radius: 999px; flex-shrink: 0; }
@@ -66,12 +72,13 @@
     .lh-metric-body { padding: 0 14px 14px 34px; border-top: 1px solid var(--line); }
     .lh-metric-desc { margin: 10px 0; font-size: 13px; color: var(--muted); }
     .lh-items { display: flex; flex-direction: column; gap: 6px; }
-    .lh-item-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 7px; background: rgba(255,255,255,0.025); font-size: 12.5px; }
+    .lh-item-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 7px; background: var(--code-bg); font-size: 12.5px; }
     .lh-item-miss { background: rgba(255, 78, 66, 0.08); border: 1px solid rgba(255, 78, 66, 0.25); }
     .lh-item-name { color: var(--fg); }
     .lh-item-val { font-family: var(--mono); font-weight: 600; color: var(--fg); margin-left: auto; }
     .lh-item-target { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
-    .lh-item-note { width: 100%; font-size: 12px; color: var(--accent); }
+    .lh-item-note { width: 100%; font-size: 12px; color: var(--muted); }
+    .lh-item-miss .lh-item-note { color: var(--accent); }
     .lh-raw-receipt { margin-top: 28px; }
     .lh-raw-receipt summary { cursor: pointer; font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
     .lh-raw-receipt pre { margin-top: 10px; max-height: 360px; overflow: auto; background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px; padding: 14px; font-size: 11.5px; color: var(--fg); }
@@ -91,6 +98,7 @@
         <a href="/history">Mythical History</a>
         <a href="/llms.txt">llms.txt</a>
         <a href="https://smithers.sh/smithersai/dangerouslyusebrowser">Smithers Cloud</a>
+        <button class="theme-btn" id="theme-toggle" type="button">Dark</button>
       </nav>
     </header>
 
@@ -100,7 +108,7 @@
           <div>
             <div class="eyebrow">
               <span class="dot" aria-hidden="true"></span>
-              <span>Uphill Backpressure &middot; Chromium 157.0.8082.0 &middot; Generated 2026-11-27T08:01:52Z</span>
+              <span>Uphill Backpressure &middot; Chromium 157.0.8082.0 &middot; Generated 2026-11-27T08:21:28Z</span>
             </div>
             <h1>Dub Lighthouse Audit Report</h1>
             <p>
@@ -111,13 +119,13 @@
           <div class="lh-composite">
             
     <svg class="lh-gauge-svg" width="82" height="82" viewBox="0 0 100 100" aria-hidden="true">
-      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="rgba(255,255,255,0.08)" stroke-width="7" />
+      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="var(--border)" stroke-width="7" />
       <circle cx="50" cy="50" r="42" fill="none" stroke="#0cce6b" stroke-width="7"
         stroke-linecap="round"
         stroke-dasharray="263.89"
-        stroke-dashoffset="5.28"
+        stroke-dashoffset="2.64"
         transform="rotate(-90 50 50)" />
-      <text x="50" y="55" text-anchor="middle" fill="#0cce6b" font-size="27" font-weight="700" font-family="var(--mono)">98</text>
+      <text x="50" y="55" text-anchor="middle" fill="#0cce6b" font-size="27" font-weight="700" font-family="var(--mono)">99</text>
     </svg>
             <div class="lh-composite-meta">
               <strong>Composite Score</strong>
@@ -132,7 +140,7 @@
       <a class="lh-gauge-card" href="#cat-bridge-safety">
         
     <svg class="lh-gauge-svg" width="98" height="98" viewBox="0 0 100 100" aria-hidden="true">
-      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="rgba(255,255,255,0.08)" stroke-width="7" />
+      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="var(--border)" stroke-width="7" />
       <circle cx="50" cy="50" r="42" fill="none" stroke="#0cce6b" stroke-width="7"
         stroke-linecap="round"
         stroke-dasharray="263.89"
@@ -147,7 +155,7 @@
       <a class="lh-gauge-card" href="#cat-typescript-quality">
         
     <svg class="lh-gauge-svg" width="98" height="98" viewBox="0 0 100 100" aria-hidden="true">
-      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="rgba(255,255,255,0.08)" stroke-width="7" />
+      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="var(--border)" stroke-width="7" />
       <circle cx="50" cy="50" r="42" fill="none" stroke="#0cce6b" stroke-width="7"
         stroke-linecap="round"
         stroke-dasharray="263.89"
@@ -162,7 +170,7 @@
       <a class="lh-gauge-card" href="#cat-mcp-security">
         
     <svg class="lh-gauge-svg" width="98" height="98" viewBox="0 0 100 100" aria-hidden="true">
-      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="rgba(255,255,255,0.08)" stroke-width="7" />
+      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="var(--border)" stroke-width="7" />
       <circle cx="50" cy="50" r="42" fill="none" stroke="#0cce6b" stroke-width="7"
         stroke-linecap="round"
         stroke-dasharray="263.89"
@@ -177,13 +185,13 @@
       <a class="lh-gauge-card" href="#cat-testing-and-fuzz">
         
     <svg class="lh-gauge-svg" width="98" height="98" viewBox="0 0 100 100" aria-hidden="true">
-      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="rgba(255,255,255,0.08)" stroke-width="7" />
+      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="var(--border)" stroke-width="7" />
       <circle cx="50" cy="50" r="42" fill="none" stroke="#0cce6b" stroke-width="7"
         stroke-linecap="round"
         stroke-dasharray="263.89"
-        stroke-dashoffset="18.47"
+        stroke-dashoffset="13.19"
         transform="rotate(-90 50 50)" />
-      <text x="50" y="55" text-anchor="middle" fill="#0cce6b" font-size="27" font-weight="700" font-family="var(--mono)">93</text>
+      <text x="50" y="55" text-anchor="middle" fill="#0cce6b" font-size="27" font-weight="700" font-family="var(--mono)">95</text>
     </svg>
         <span class="lh-gauge-title">Testing &amp; Fuzzing</span>
         <span class="lh-gauge-pill lh-pass">Passing</span>
@@ -192,7 +200,7 @@
       <a class="lh-gauge-card" href="#cat-docs-and-footprint">
         
     <svg class="lh-gauge-svg" width="98" height="98" viewBox="0 0 100 100" aria-hidden="true">
-      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="rgba(255,255,255,0.08)" stroke-width="7" />
+      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="var(--border)" stroke-width="7" />
       <circle cx="50" cy="50" r="42" fill="none" stroke="#0cce6b" stroke-width="7"
         stroke-linecap="round"
         stroke-dasharray="263.89"
@@ -235,6 +243,17 @@
         </div>
       </section>
 
+      <div class="lh-repro-bar" aria-label="Reproduce audit locally">
+        <span>Reproduce locally:</span>
+        <code id="lh-repro-cmd">uphill check &amp;&amp; uphill --compact --require-targets --require-baseline</code>
+        <button class="lh-filter-btn" id="lh-copy-cmd" type="button">Copy</button>
+        <div class="lh-repro-links">
+          <a href="/docs/lighthouse-audit.md">Markdown receipt</a>
+          <a href="/audit-summary.json">Summary JSON</a>
+          <a href="https://github.com/smithersai/dangerouslyusebrowser/actions/workflows/uphill.yml">CI workflow</a>
+        </div>
+      </div>
+
       <section class="lh-panel">
         <h2>Opportunities (0)</h2>
         <div class="lh-all-clear">
@@ -250,6 +269,7 @@
         <button class="lh-filter-btn active" data-filter="all" type="button">All audits (19)</button>
         <button class="lh-filter-btn" data-filter="pass" type="button">Passing (19)</button>
         <button class="lh-filter-btn" data-filter="nonpass" type="button">Missed / Needs work (0)</button>
+        <button class="lh-expand-btn" id="lh-toggle-all" type="button" data-expanded="false">Expand all</button>
       </div>
 
       
@@ -257,7 +277,7 @@
         <div class="lh-cat-head">
           
     <svg class="lh-gauge-svg" width="64" height="64" viewBox="0 0 100 100" aria-hidden="true">
-      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="rgba(255,255,255,0.08)" stroke-width="7" />
+      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="var(--border)" stroke-width="7" />
       <circle cx="50" cy="50" r="42" fill="none" stroke="#0cce6b" stroke-width="7"
         stroke-linecap="round"
         stroke-dasharray="263.89"
@@ -353,7 +373,7 @@
         <div class="lh-cat-head">
           
     <svg class="lh-gauge-svg" width="64" height="64" viewBox="0 0 100 100" aria-hidden="true">
-      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="rgba(255,255,255,0.08)" stroke-width="7" />
+      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="var(--border)" stroke-width="7" />
       <circle cx="50" cy="50" r="42" fill="none" stroke="#0cce6b" stroke-width="7"
         stroke-linecap="round"
         stroke-dasharray="263.89"
@@ -682,17 +702,11 @@
               <span class="lh-status-dot lh-dot-pass" aria-label="Passing"></span>
               <span class="lh-metric-name">Ts max fn lines</span>
               <span class="lh-metric-weight">w=1</span>
-              <span class="lh-metric-score lh-pass">95/100</span>
+              <span class="lh-metric-score lh-pass">96/100</span>
             </summary>
             <div class="lh-metric-body">
               <p class="lh-metric-desc">Keep TypeScript functions concise (target &lt;= 110 lines) across src/ modules.</p>
               <div class="lh-items">
-              <div class="lh-item-row ">
-                <code class="lh-item-name">src/launch.ts</code>
-                <span class="lh-item-val">104</span>
-                <span class="lh-item-target">Target: &lt;= 110</span>
-                
-              </div>
               <div class="lh-item-row ">
                 <code class="lh-item-name">src/commands.ts</code>
                 <span class="lh-item-val">87</span>
@@ -708,6 +722,12 @@
               <div class="lh-item-row ">
                 <code class="lh-item-name">src/http.ts</code>
                 <span class="lh-item-val">77</span>
+                <span class="lh-item-target">Target: &lt;= 110</span>
+                
+              </div>
+              <div class="lh-item-row ">
+                <code class="lh-item-name">src/launch.ts</code>
+                <span class="lh-item-val">74</span>
                 <span class="lh-item-target">Target: &lt;= 110</span>
                 
               </div>
@@ -785,7 +805,7 @@
         <div class="lh-cat-head">
           
     <svg class="lh-gauge-svg" width="64" height="64" viewBox="0 0 100 100" aria-hidden="true">
-      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="rgba(255,255,255,0.08)" stroke-width="7" />
+      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="var(--border)" stroke-width="7" />
       <circle cx="50" cy="50" r="42" fill="none" stroke="#0cce6b" stroke-width="7"
         stroke-linecap="round"
         stroke-dasharray="263.89"
@@ -881,19 +901,19 @@
         <div class="lh-cat-head">
           
     <svg class="lh-gauge-svg" width="64" height="64" viewBox="0 0 100 100" aria-hidden="true">
-      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="rgba(255,255,255,0.08)" stroke-width="7" />
+      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="var(--border)" stroke-width="7" />
       <circle cx="50" cy="50" r="42" fill="none" stroke="#0cce6b" stroke-width="7"
         stroke-linecap="round"
         stroke-dasharray="263.89"
-        stroke-dashoffset="18.47"
+        stroke-dashoffset="13.19"
         transform="rotate(-90 50 50)" />
-      <text x="50" y="55" text-anchor="middle" fill="#0cce6b" font-size="27" font-weight="700" font-family="var(--mono)">93</text>
+      <text x="50" y="55" text-anchor="middle" fill="#0cce6b" font-size="27" font-weight="700" font-family="var(--mono)">95</text>
     </svg>
           <div>
             <h2>Testing &amp; Fuzzing</h2>
             <p>Maintain high test-to-source ratio, fuzz boundary coverage, and compiled-fork acceptance suites.</p>
           </div>
-          <span class="lh-cat-badge lh-pass">93 / 100</span>
+          <span class="lh-cat-badge lh-pass">95 / 100</span>
         </div>
         <div class="lh-metric-list">
           <details class="lh-metric" data-tier="pass" >
@@ -901,16 +921,16 @@
               <span class="lh-status-dot lh-dot-pass" aria-label="Passing"></span>
               <span class="lh-metric-name">Test to src ratio</span>
               <span class="lh-metric-weight">w=2</span>
-              <span class="lh-metric-score lh-pass">92/100</span>
+              <span class="lh-metric-score lh-pass">93/100</span>
             </summary>
             <div class="lh-metric-body">
               <p class="lh-metric-desc">Maintain at least 55% test-to-source line ratio across tests/ vs src/ + native/.</p>
               <div class="lh-items">
               <div class="lh-item-row ">
                 <code class="lh-item-name">dub</code>
-                <span class="lh-item-val">63</span>
+                <span class="lh-item-val">68</span>
                 <span class="lh-item-target">Target: &gt;= 55</span>
-                <span class="lh-item-note">63% (3147 test lines / 5011 src+native lines)</span>
+                <span class="lh-item-note">68% (3453 test lines / 5084 src+native lines)</span>
               </div></div>
             </div>
           </details>
@@ -920,14 +940,14 @@
               <span class="lh-status-dot lh-dot-pass" aria-label="Passing"></span>
               <span class="lh-metric-name">Fuzz tests</span>
               <span class="lh-metric-weight">w=2</span>
-              <span class="lh-metric-score lh-pass">90/100</span>
+              <span class="lh-metric-score lh-pass">95/100</span>
             </summary>
             <div class="lh-metric-body">
               <p class="lh-metric-desc">Keep broad fuzz coverage across N-API framing, HTTP boundaries, SHA-256 installer, durations, and one-time auth.</p>
               <div class="lh-items">
               <div class="lh-item-row ">
                 <code class="lh-item-name">tests/fuzz.test.mjs</code>
-                <span class="lh-item-val">5</span>
+                <span class="lh-item-val">8</span>
                 <span class="lh-item-target">Target: &gt;= 5</span>
                 
               </div></div>
@@ -939,14 +959,14 @@
               <span class="lh-status-dot lh-dot-pass" aria-label="Passing"></span>
               <span class="lh-metric-name">Unit tests</span>
               <span class="lh-metric-weight">w=2</span>
-              <span class="lh-metric-score lh-pass">96/100</span>
+              <span class="lh-metric-score lh-pass">97/100</span>
             </summary>
             <div class="lh-metric-body">
               <p class="lh-metric-desc">Maintain comprehensive unit, bridge, MCP, auth, trigger, and plugin test coverage across tests/*.test.mjs.</p>
               <div class="lh-items">
               <div class="lh-item-row ">
                 <code class="lh-item-name">tests/*.test.mjs</code>
-                <span class="lh-item-val">37</span>
+                <span class="lh-item-val">46</span>
                 <span class="lh-item-target">Target: &gt;= 25</span>
                 
               </div></div>
@@ -977,7 +997,7 @@
         <div class="lh-cat-head">
           
     <svg class="lh-gauge-svg" width="64" height="64" viewBox="0 0 100 100" aria-hidden="true">
-      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="rgba(255,255,255,0.08)" stroke-width="7" />
+      <circle cx="50" cy="50" r="42" fill="rgba(12, 206, 107, 0.12)" stroke="var(--border)" stroke-width="7" />
       <circle cx="50" cy="50" r="42" fill="none" stroke="#0cce6b" stroke-width="7"
         stroke-linecap="round"
         stroke-dasharray="263.89"
@@ -1505,9 +1525,9 @@
           &quot;description&quot;: &quot;Keep TypeScript functions concise (target &lt;= 110 lines) across src/ modules.&quot;,
           &quot;kind&quot;: &quot;count&quot;,
           &quot;unit&quot;: null,
-          &quot;value&quot;: 87,
-          &quot;item&quot;: &quot;src/commands.ts&quot;,
-          &quot;score&quot;: 95,
+          &quot;value&quot;: 79,
+          &quot;item&quot;: &quot;src/auth.ts&quot;,
+          &quot;score&quot;: 96,
           &quot;target&quot;: 110,
           &quot;default&quot;: 110,
           &quot;note&quot;: null,
@@ -1515,12 +1535,6 @@
           &quot;weight&quot;: 1,
           &quot;rollup&quot;: &quot;p90&quot;,
           &quot;items&quot;: [
-            {
-              &quot;name&quot;: &quot;src/launch.ts&quot;,
-              &quot;value&quot;: 104,
-              &quot;target&quot;: null,
-              &quot;note&quot;: null
-            },
             {
               &quot;name&quot;: &quot;src/commands.ts&quot;,
               &quot;value&quot;: 87,
@@ -1536,6 +1550,12 @@
             {
               &quot;name&quot;: &quot;src/http.ts&quot;,
               &quot;value&quot;: 77,
+              &quot;target&quot;: null,
+              &quot;note&quot;: null
+            },
+            {
+              &quot;name&quot;: &quot;src/launch.ts&quot;,
+              &quot;value&quot;: 74,
               &quot;target&quot;: null,
               &quot;note&quot;: null
             },
@@ -1720,7 +1740,7 @@
       &quot;title&quot;: &quot;Testing &amp; Fuzzing&quot;,
       &quot;subject&quot;: null,
       &quot;description&quot;: &quot;Maintain high test-to-source ratio, fuzz boundary coverage, and compiled-fork acceptance suites.&quot;,
-      &quot;score&quot;: 93,
+      &quot;score&quot;: 95,
       &quot;rounds&quot;: 1,
       &quot;metrics&quot;: [
         {
@@ -1729,9 +1749,9 @@
           &quot;description&quot;: &quot;Maintain at least 55% test-to-source line ratio across tests/ vs src/ + native/.&quot;,
           &quot;kind&quot;: &quot;count&quot;,
           &quot;unit&quot;: null,
-          &quot;value&quot;: 63,
+          &quot;value&quot;: 68,
           &quot;item&quot;: &quot;dub&quot;,
-          &quot;score&quot;: 92,
+          &quot;score&quot;: 93,
           &quot;target&quot;: 55,
           &quot;default&quot;: 55,
           &quot;note&quot;: null,
@@ -1741,9 +1761,9 @@
           &quot;items&quot;: [
             {
               &quot;name&quot;: &quot;dub&quot;,
-              &quot;value&quot;: 63,
+              &quot;value&quot;: 68,
               &quot;target&quot;: null,
-              &quot;note&quot;: &quot;63% (3147 test lines / 5011 src+native lines)&quot;
+              &quot;note&quot;: &quot;68% (3453 test lines / 5084 src+native lines)&quot;
             }
           ]
         },
@@ -1753,9 +1773,9 @@
           &quot;description&quot;: &quot;Keep broad fuzz coverage across N-API framing, HTTP boundaries, SHA-256 installer, durations, and one-time auth.&quot;,
           &quot;kind&quot;: &quot;count&quot;,
           &quot;unit&quot;: null,
-          &quot;value&quot;: 5,
+          &quot;value&quot;: 8,
           &quot;item&quot;: &quot;tests/fuzz.test.mjs&quot;,
-          &quot;score&quot;: 90,
+          &quot;score&quot;: 95,
           &quot;target&quot;: 5,
           &quot;default&quot;: 5,
           &quot;note&quot;: null,
@@ -1765,7 +1785,7 @@
           &quot;items&quot;: [
             {
               &quot;name&quot;: &quot;tests/fuzz.test.mjs&quot;,
-              &quot;value&quot;: 5,
+              &quot;value&quot;: 8,
               &quot;target&quot;: null,
               &quot;note&quot;: null
             }
@@ -1777,9 +1797,9 @@
           &quot;description&quot;: &quot;Maintain comprehensive unit, bridge, MCP, auth, trigger, and plugin test coverage across tests/*.test.mjs.&quot;,
           &quot;kind&quot;: &quot;count&quot;,
           &quot;unit&quot;: null,
-          &quot;value&quot;: 37,
+          &quot;value&quot;: 46,
           &quot;item&quot;: &quot;tests/*.test.mjs&quot;,
-          &quot;score&quot;: 96,
+          &quot;score&quot;: 97,
           &quot;target&quot;: 25,
           &quot;default&quot;: 25,
           &quot;note&quot;: null,
@@ -1789,7 +1809,7 @@
           &quot;items&quot;: [
             {
               &quot;name&quot;: &quot;tests/*.test.mjs&quot;,
-              &quot;value&quot;: 37,
+              &quot;value&quot;: 46,
               &quot;target&quot;: null,
               &quot;note&quot;: null
             }
@@ -1938,6 +1958,27 @@
           });
         });
       });
+
+      const toggleAll = document.getElementById('lh-toggle-all');
+      if (toggleAll) {
+        toggleAll.addEventListener('click', () => {
+          const next = toggleAll.dataset.expanded !== 'true';
+          toggleAll.dataset.expanded = String(next);
+          toggleAll.textContent = next ? 'Collapse all' : 'Expand all';
+          metrics.forEach(m => { m.open = next; });
+        });
+      }
+
+      const copyBtn = document.getElementById('lh-copy-cmd');
+      const cmdEl = document.getElementById('lh-repro-cmd');
+      if (copyBtn && cmdEl) {
+        copyBtn.addEventListener('click', () => {
+          navigator.clipboard.writeText(cmdEl.textContent || '').then(() => {
+            copyBtn.textContent = 'Copied';
+            setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1400);
+          });
+        });
+      }
     })();
   </script>
 </body>

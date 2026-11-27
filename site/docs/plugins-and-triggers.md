@@ -28,6 +28,6 @@ Milestone 4 turns Dub into a programmable browser runtime built directly on Smit
 
 ## Related pages
 
-- [[native-bridge]]
-- [[network-and-clock]]
-- [[cloud-mcp-and-auth]]
+- [native-bridge](https://dangerouslyusebrowser.smithers.sh/docs/native-bridge.md)
+- [network-and-clock](https://dangerouslyusebrowser.smithers.sh/docs/network-and-clock.md)
+- [cloud-mcp-and-auth](https://dangerouslyusebrowser.smithers.sh/docs/cloud-mcp-and-auth.md)

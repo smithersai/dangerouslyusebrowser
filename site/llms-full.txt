@@ -8,6 +8,21 @@
 
 Dub (**DangerouslyUseBrowser**) is a real Chromium `157.0.8082.0` fork that exposes browser internals directly to coding agents through native C++20 N-API bindings and an [incur](https://github.com/wevm/incur) MCP server. It is not Playwright, not a stock-CDP wrapper, and not Electron.
 
+```
+BYO Agent (Claude Code / Codex / Antigravity)
+   |
+   +--> Smithers Cloud MCP (https://smithers.sh/api/mcp)
+   |       Issues, TODOs, PRs, stacks, flows, shared cache (build.smithers.sh)
+   |
+   +--> Dub MCP Server (dub serve /mcp, single-use /auth/exchange token)
+           |
+           v
+        incur CLI + QuickJS REPL + Jev + TS Plugins (src/)
+           |
+           v  C++20 N-API v8 over AF_UNIX (native/dub.cc + addon.cc)
+        Forked Chromium 157.0.8082.0 (NetworkService, Per-Tab Clock, Actor, WebMCP)
+```
+
 ## Why a real Chromium fork
 
 Stock automation protocols sit outside the browser engine's privileged seams. Dub patches Chromium directly at the C++ browser, renderer, V8, Blink, and NetworkService boundaries so agents can:
@@ -281,11 +296,11 @@ Every privileged operation in Dub and its Smithers Cloud factory traces back to 
 
 | Privileged step | Origin input | Boundary check | Failure behavior |
 | --- | --- | --- | --- |
-| Mint one-time sandbox token (`POST /auth/one-time-tokens`) | HTTP `Authorization` header + JSON body | Requires `trust === "trusted"` and `auth:mint` scope verified via SHA-256 + `timingSafeEqual`; rejects `trusted` for `contributor`/`viewer` roles | HTTP `401` / `403` / `400`, audited |
-| Redeem one-time token (`POST /auth/exchange`) | JSON body `token` (never argv or query string) | Constant-time SHA-256 lookup, TTL check, atomic `used = true` before session issue | HTTP `401` (`OTT_INVALID` / `OTT_EXPIRED`) or `409` (`OTT_ALREADY_USED`), audited |
-| Invoke privileged MCP tools (`profile_attach`, `plugin_load`, `plugin_unload`, `plugin_reload`, `quit`) | HTTP `Authorization` + JSON-RPC `method` / `params.name` | `checkUntrustedMcpGate` blocks `trust === "untrusted"` before incur/Chromium | HTTP `403` with JSON-RPC `-32003` |
-| Write to shared Smithers Cloud object store (`https://build.smithers.sh`) | GitHub event + `SMITHERS_CACHE_WRITE_TOKEN` | Exposed strictly on `push` to `main` or maintainer `workflow_dispatch`; never on `pull_request` | Read-only cache fallback on untrusted PRs |
-| Modify `protectedPaths` (`.github`, `.smithers`, `.agents`, `chromium/patches`, `native`) | PR diff / Smithers Change | `S.Github.Policy` flags protected paths and restricts `todo`/merge actions to `maintainers: ["roninjin10"]` | Human maintainer approval required |
+| Mint one-time sandbox token (`POST /auth/one-time-tokens`) | HTTP `Authorization` header + JSON body | Requires `trust === "trusted"` and `auth:mint` scope verified via SHA-256 + `timingSafeEqual`, rejecting `trusted` for `contributor` or `viewer` roles | HTTP `401`, `403`, or `400`, audited |
+| Redeem one-time token (`POST /auth/exchange`) | JSON body `token` (never argv or query string) | Constant-time SHA-256 lookup, 64 KiB body limit, TTL check, atomic `used = true` before session issue | HTTP `401` (`OTT_INVALID` / `OTT_EXPIRED`), `409` (`OTT_ALREADY_USED`), or `413` |
+| Invoke privileged MCP tools (`profile_attach`, `plugin_load`, `plugin_unload`, `plugin_reload`, `quit`) | HTTP `Authorization` + single or batched JSON-RPC `tools/call` | `checkUntrustedMcpGate` inspects both single objects and JSON-RPC batch arrays, blocking `trust === "untrusted"` before incur/Chromium | HTTP `403` with JSON-RPC `-32003` |
+| Write to shared Smithers Cloud object store (`https://build.smithers.sh`) | GitHub event + `SMITHERS_CACHE_WRITE_TOKEN` | Exposed strictly on `push` to `main` or maintainer `workflow_dispatch`, never on `pull_request` | Read-only cache fallback on untrusted PRs |
+| Modify `protectedPaths` (`.github`, `.smithers`, `.agents`, `chromium/patches`, `native`) | PR diff / Smithers Change | `S.Github.Policy` flags protected paths and restricts `todo` and merge actions to `maintainers: ["roninjin10"]` | Human maintainer approval required |
 | Publish npm package or deploy docs (`dangerouslyusebrowser.smithers.sh`) | Verified `main` commit merged by human maintainer | `release.yml` runs full `smthrs ci //...`, `npm test`, `uphill --require-targets`, and tarball rehearsal | Pipeline aborts on any non-zero exit |
 
 ## Connecting agents to Smithers Cloud MCP
@@ -437,6 +452,8 @@ Chromium gained a live AF_UNIX push event stream (dub_events) feeding a full Smi
 Dub switched permanently onto Smithers Cloud: incremental smthrs targets backed by the shared build.smithers.sh object store, single-use one-time sandbox auth tokens, strict untrusted-vs-trusted cache isolation, Lighthouse-style Uphill backpressure, personalized Maintainer/Contributor/Viewer views, Obsidian wiki, and automated release and docs pipelines.
 
 **Verified commits:**
+- `edd58a7e` (2026-11-27) fix(ci): run Uphill via wevm/uphill@main and npx uphill@0.0.11
+- `a60429a1` (2026-11-27) feat(factory): switch Dub onto Smithers Cloud factory, Lighthouse backpressure, one-time sandbox auth, wiki, and Mythical History
 - `d84fad3e` (2026-11-26) feat(milestone-4): add Chromium push events, Smithers QuickJS code mode, Jev, BYO agent triggers, and TS plugins
 
 **Key artifacts:** `.smithers/WORKSPACE.ts`, `.smithers/FACTORY.ts`, `.smithers/home.json`, `.agents/uphill/uphill.yaml`, `src/auth.ts`, `site/audit.html`
@@ -445,6 +462,8 @@ Dub switched permanently onto Smithers Cloud: incremental smthrs targets backed 
 
 | Commit | Date | Description |
 | --- | --- | --- |
+| `edd58a7e` | 2026-11-27 | fix(ci): run Uphill via wevm/uphill@main and npx uphill@0.0.11 |
+| `a60429a1` | 2026-11-27 | feat(factory): switch Dub onto Smithers Cloud factory, Lighthouse backpressure, one-time sandbox auth, wiki, and Mythical History |
 | `d84fad3e` | 2026-11-26 | feat(milestone-4): add Chromium push events, Smithers QuickJS code mode, Jev, BYO agent triggers, and TS plugins |
 | `b138b7df` | 2026-11-24 | feat(release): add dub install auto-downloader, prebuilt N-API binaries, fuzz tests, demo video, and docs site |
 | `06d7c3cc` | 2026-11-23 | feat(launch): add reproducible demos, launch evidence bundle, and verified README |
@@ -458,6 +477,78 @@ Dub switched permanently onto Smithers Cloud: incremental smthrs targets backed 
 | `79c48d29` | 2026-09-30 | test: verify compiled N-API framing, concurrency, deadlines and errors |
 | `2030aa8b` | 2026-09-30 | spec: record Dub fork contract, native architecture and release gates |
 
+
+
+---
+<!-- .uphill/report.json -->
+
+# Lighthouse Backpressure Audit
+
+Live composite score: **99 / 100** across **5 categories** with **0 open opportunities**.
+
+Open the interactive SVG gauge dashboard at [dangerouslyusebrowser.smithers.sh/audit](https://dangerouslyusebrowser.smithers.sh/audit).
+
+## Category Scores
+
+| Category | Score | Status | Focus |
+| --- | --- | --- | --- |
+| Native Bridge & Seam Safety | **100/100** | Passing | Protect the C++20 N-API bridge, Chromium 157 overlay patches, and public repository hygiene. |
+| TypeScript Quality | **99/100** | Passing | Enforce strict typing, zero compiler suppressions, clean stdout for MCP, and modular functions across src/. |
+| MCP Security & Trust | **100/100** | Passing | Enforce loopback defaults, timing-safe one-time auth tokens, untrusted execution isolation, and protected factory paths. |
+| Testing & Fuzzing | **95/100** | Passing | Maintain high test-to-source ratio, fuzz boundary coverage, and compiled-fork acceptance suites. |
+| Docs, Wiki & Footprint | **100/100** | Passing | Keep prebuilt N-API binaries lean, markdown links valid, and public wiki, mythical history, and llms.txt current. |
+
+## Metric Breakdown
+
+### Native Bridge & Seam Safety (100/100)
+
+| Metric | Score | Value | Target |
+| --- | --- | --- | --- |
+| Cpp no abort | 100/100 | `PASS` | `PASS` |
+| Cpp strict flags | 100/100 | `PASS` | `PASS` |
+| Overlay integrity | 100/100 | `PASS` | `PASS` |
+| No private leaks | 100/100 | `PASS` | `PASS` |
+
+### TypeScript Quality (99/100)
+
+| Metric | Score | Value | Target |
+| --- | --- | --- | --- |
+| Ts no explicit any | 100/100 | `PASS` | `PASS` |
+| Ts no suppressions | 100/100 | `PASS` | `PASS` |
+| Ts no console log | 100/100 | `PASS` | `PASS` |
+| Ts max fn lines | 96/100 | `79` | `<= 110` |
+
+### MCP Security & Trust (100/100)
+
+| Metric | Score | Value | Target |
+| --- | --- | --- | --- |
+| Loopback and timing safe | 100/100 | `PASS` | `PASS` |
+| One time sandbox auth | 100/100 | `PASS` | `PASS` |
+| Protected factory paths | 100/100 | `PASS` | `PASS` |
+| Untrusted cache isolation | 100/100 | `PASS` | `PASS` |
+
+### Testing & Fuzzing (95/100)
+
+| Metric | Score | Value | Target |
+| --- | --- | --- | --- |
+| Test to src ratio | 93/100 | `68` | `>= 55` |
+| Fuzz tests | 95/100 | `8` | `>= 5` |
+| Unit tests | 97/100 | `46` | `>= 25` |
+| Browser acceptance suites | 92/100 | `6` | `>= 5` |
+
+### Docs, Wiki & Footprint (100/100)
+
+| Metric | Score | Value | Target |
+| --- | --- | --- | --- |
+| Prebuild size | 99/100 | `59300 B` | `<= 160000 B` |
+| Markdown links | 100/100 | `PASS` | `PASS` |
+| Factory knowledge | 100/100 | `PASS` | `PASS` |
+
+## Trust and Object Store Posture
+
+- **Shared object store**: `https://build.smithers.sh` serves incremental `smthrs` build and test results.
+- **Untrusted execution**: Fork and external PR runs execute freely with read-only cache access (`SMITHERS_CACHE_READ_TOKEN` only) and never poison the cache or bypass maintainer gates.
+- **Run locally**: `uphill check && uphill --compact --require-targets --require-baseline`
 
 
 ---

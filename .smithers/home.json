@@ -126,8 +126,8 @@
       "blocks": [
         {
           "type": "hero",
-          "title": "Dub (DangerouslyUseBrowser)",
-          "tagline": "A real Chromium 157 fork exposing browser internals directly to agents through native C++20 N-API bindings and an incur MCP server.",
+          "title": "Dub",
+          "tagline": "DangerouslyUseBrowser: a real Chromium 157 fork exposing browser internals directly to agents through native C++20 N-API bindings and an incur MCP server.",
           "text": "Rewrite NetworkService traffic across workers and caches, freeze and step per-tab V8 and Blink clocks, act through native Chromium actor tools and WebMCP, and run QuickJS plugins with one-time sandbox auth.",
           "install": "npm install dangerouslyusebrowser",
           "actions": [
@@ -146,7 +146,7 @@
           ],
           "announcement": {
             "label": "Built publicly on Smithers Cloud with live Lighthouse backpressure",
-            "url": "https://dangerouslyusebrowser.smithers.sh/audit.html"
+            "url": "https://dangerouslyusebrowser.smithers.sh/audit"
           }
         },
         {
@@ -154,7 +154,7 @@
           "title": "Connect an agent with one-time sandbox auth",
           "file": "quickstart.sh",
           "language": "sh",
-          "code": "# Download verified Chromium 157 binary and start authenticated MCP server\ndub install\ndub serve --port 7777 --print-one-time-token --sandbox-id demo-1\n\n# Connect via MCP HTTP at http://127.0.0.1:7777/mcp\n# Or connect your agent to Smithers Cloud MCP: https://smithers.sh/api/mcp"
+          "code": "# Download Chromium 157 fork and start MCP server\ndub install\ndub serve --port 7777 --print-one-time-token \\\n  --sandbox-id demo-1\n\n# Dub MCP: http://127.0.0.1:7777/mcp\n# Smithers Cloud MCP: https://smithers.sh/api/mcp"
         },
         {
           "type": "stats",
@@ -220,14 +220,14 @@
           "releases": [
             {
               "name": "v0.1.0-alpha.1",
-              "url": "https://github.com/smithersai/dangerouslyusebrowser/tree/main",
-              "date": "2026-11-26",
+              "url": "https://github.com/smithersai/dangerouslyusebrowser/releases/tag/v0.1.0-alpha.1",
+              "date": "2026-11-27",
               "summary": "Chromium 157 fork, N-API bridge, QuickJS plugins, one-time sandbox auth, and Smithers Cloud factory."
             }
           ],
           "more": {
             "label": "Read the Mythical History",
-            "url": "https://dangerouslyusebrowser.smithers.sh/history.html"
+            "url": "https://dangerouslyusebrowser.smithers.sh/history"
           }
         },
         {

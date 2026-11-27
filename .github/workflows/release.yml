@@ -33,10 +33,10 @@ jobs:
       should_publish: ${{ steps.check.outputs.should_publish }}
       should_deploy_docs: ${{ steps.check.outputs.should_deploy_docs }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
       - id: check
@@ -75,10 +75,10 @@ jobs:
       SMITHERS_CACHE_READ_TOKEN: ${{ secrets.SMITHERS_CACHE_READ_TOKEN }}
       SMITHERS_CACHE_WRITE_TOKEN: ${{ secrets.SMITHERS_CACHE_WRITE_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -87,8 +87,9 @@ jobs:
       - name: Rebuild site, wiki, Mythical History, llms.txt, and Lighthouse audit
         run: |
           node scripts/build-knowledge.mjs
-          npx --yes uphill@0.0.11 --compact
+          npx --yes uphill@0.0.11 --compact --require-targets
           node scripts/build-audit-report.mjs
+          node scripts/build-knowledge.mjs
           ./node_modules/.bin/smthrs ci //.smithers:* --ui plain
       - name: Deploy site to dangerouslyusebrowser.smithers.sh
         if: env.CLOUDFLARE_API_TOKEN != ''
@@ -102,7 +103,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          for p in "/" "/audit" "/wiki" "/history" "/llms.txt" "/audit-summary.json"; do
+          for p in "/" "/audit" "/wiki" "/history" "/llms.txt" "/audit-summary.json" "/docs/start-here.md" "/docs/lighthouse-audit.md" "/theme.js"; do
             code="$(curl -s -o /dev/null -w '%{http_code}' "https://dangerouslyusebrowser.smithers.sh${p}")"
             echo "GET ${p} -> HTTP ${code}"
             test "$code" = "200"
@@ -118,8 +119,8 @@ jobs:
       SMITHERS_CACHE_READ_TOKEN: ${{ secrets.SMITHERS_CACHE_READ_TOKEN }}
       SMITHERS_CACHE_WRITE_TOKEN: ${{ secrets.SMITHERS_CACHE_WRITE_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
@@ -136,7 +137,7 @@ jobs:
           tarball="$(npm pack --silent)"
           sha256sum "$tarball" > SHA256SUMS.txt
           tmp="$(mktemp -d)"
-          (cd "$tmp" && npm init -y >/dev/null && npm install "$GITHUB_WORKSPACE/$tarball" && npx dub --help >/dev/null)
+          (cd "$tmp" && env -u SMITHERS_CACHE_READ_TOKEN -u SMITHERS_CACHE_WRITE_TOKEN -u NPM_TOKEN npm init -y >/dev/null && env -u SMITHERS_CACHE_READ_TOKEN -u SMITHERS_CACHE_WRITE_TOKEN -u NPM_TOKEN npm install "$GITHUB_WORKSPACE/$tarball" && npx dub --help >/dev/null)
           rm -rf "$tmp"
       - name: Publish to npm
         if: env.NODE_AUTH_TOKEN != ''

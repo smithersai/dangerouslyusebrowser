@@ -19,10 +19,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -33,7 +33,7 @@ jobs:
       - name: Validate metric scripts and generate Lighthouse UI
         run: |
           npx --yes uphill@0.0.11 check
-          npx --yes uphill@0.0.11 --compact
+          npx --yes uphill@0.0.11 --compact --require-targets
           node scripts/build-audit-report.mjs
       - name: Publish Lighthouse summary
         if: always()
@@ -45,7 +45,7 @@ jobs:
           fi
       - name: Upload Lighthouse Audit Artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dub-lighthouse-audit
           path: |

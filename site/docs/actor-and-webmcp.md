@@ -24,6 +24,6 @@ When a web application registers tools through WebMCP (`navigator.modelContext`)
 
 ## Related pages
 
-- [[chromium-seams]]
-- [[network-and-clock]]
-- [[cloud-mcp-and-auth]]
+- [chromium-seams](https://dangerouslyusebrowser.smithers.sh/docs/chromium-seams.md)
+- [network-and-clock](https://dangerouslyusebrowser.smithers.sh/docs/network-and-clock.md)
+- [cloud-mcp-and-auth](https://dangerouslyusebrowser.smithers.sh/docs/cloud-mcp-and-auth.md)

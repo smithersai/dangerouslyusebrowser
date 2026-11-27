@@ -7,21 +7,22 @@
   <meta name="description" content="Source-cited Obsidian-compatible engineering wiki for Dub (Chromium 157 fork, C++20 N-API, MCP one-time auth, and Smithers Cloud factory).">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="styles.css">
+  <script src="theme.js"></script>
   <style>
     .wiki-shell { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 28px; margin: 28px 0 56px; align-items: start; }
     .wiki-sidebar { position: sticky; top: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
-    .wiki-search { width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.04); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; color: var(--fg); font-size: 13px; margin-bottom: 12px; }
+    .wiki-search { width: 100%; box-sizing: border-box; background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; color: var(--fg); font-size: 13px; margin-bottom: 12px; }
     .wiki-search:focus { outline: none; border-color: var(--accent, #f59e0b); }
     .wiki-nav { display: flex; flex-direction: column; gap: 6px; }
     .wiki-nav-btn { text-align: left; background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 10px 11px; cursor: pointer; color: var(--fg); transition: background 0.15s, border-color 0.15s; }
-    .wiki-nav-btn:hover { background: rgba(255,255,255,0.04); }
+    .wiki-nav-btn:hover { background: var(--code-bg); }
     .wiki-nav-btn.active { background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.35); }
     .wiki-nav-title { display: block; font-weight: 600; font-size: 13.5px; margin-bottom: 2px; }
     .wiki-nav-purpose { display: block; font-size: 11.5px; color: var(--muted); line-height: 1.4; }
     .wiki-article { display: none; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 28px 32px; }
     .wiki-article.active { display: block; }
     .wiki-article-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-bottom: 14px; margin-bottom: 18px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); }
-    .wiki-pill { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399; padding: 2px 9px; border-radius: 999px; font-weight: 600; font-size: 11px; }
+    .wiki-pill { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: var(--ok); padding: 2px 9px; border-radius: 999px; font-weight: 600; font-size: 11px; }
     .wiki-raw-link { margin-left: auto; color: var(--accent, #f59e0b); text-decoration: none; }
     .wiki-content h1 { margin-top: 0; font-size: 28px; }
     .wiki-content h2 { margin-top: 28px; font-size: 19px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
@@ -31,8 +32,9 @@
     .wiki-content a:hover { text-decoration: underline; }
     .wiki-pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; color: var(--fg); }
     .wiki-table-wrap { overflow-x: auto; margin: 16px 0; }
-    .wiki-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .wiki-table th, .wiki-table td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+    .wiki-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: auto; }
+    .wiki-table th, .wiki-table td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+    .wiki-table td:first-child { white-space: normal; min-width: 130px; max-width: 220px; }
     .wiki-table th { color: var(--fg); font-weight: 600; background: var(--code-bg); }
     .wiki-quote { border-left: 3px solid var(--accent); margin: 14px 0; padding: 6px 14px; color: var(--muted); background: var(--accent-soft); border-radius: 0 8px 8px 0; }
     .wiki-inputs { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--line); }
@@ -56,6 +58,7 @@
         <a href="/history">Mythical History</a>
         <a href="/llms.txt">llms.txt</a>
         <a href="https://smithers.sh/smithersai/dangerouslyusebrowser">Smithers Cloud</a>
+        <button class="theme-btn" id="theme-toggle" type="button">Dark</button>
       </nav>
     </header>
 
@@ -122,6 +125,18 @@
       </div>
       <div class="wiki-content"><h1>Start here</h1>
 <p>Dub (<strong>DangerouslyUseBrowser</strong>) is a real Chromium <code>157.0.8082.0</code> fork that exposes browser internals directly to coding agents through native C++20 N-API bindings and an <a href="https://github.com/wevm/incur" target="_blank" rel="noopener">incur</a> MCP server. It is not Playwright, not a stock-CDP wrapper, and not Electron.</p>
+<pre class="wiki-pre"><code class="lang-text">BYO Agent (Claude Code / Codex / Antigravity)
+   |
+   +--&gt; Smithers Cloud MCP (https://smithers.sh/api/mcp)
+   |       Issues, TODOs, PRs, stacks, flows, shared cache (build.smithers.sh)
+   |
+   +--&gt; Dub MCP Server (dub serve /mcp, single-use /auth/exchange token)
+           |
+           v
+        incur CLI + QuickJS REPL + Jev + TS Plugins (src/)
+           |
+           v  C++20 N-API v8 over AF_UNIX (native/dub.cc + addon.cc)
+        Forked Chromium 157.0.8082.0 (NetworkService, Per-Tab Clock, Actor, WebMCP)</code></pre>
 <h2>Why a real Chromium fork</h2>
 <p>Stock automation protocols sit outside the browser engine's privileged seams. Dub patches Chromium directly at the C++ browser, renderer, V8, Blink, and NetworkService boundaries so agents can:</p>
 <ul>
@@ -463,31 +478,31 @@ SMITHERS_TOKEN=... node scripts/mint-sandbox-auth.mjs --target smithers --ttlSec
 <tr>
 <td>Mint one-time sandbox token (<code>POST /auth/one-time-tokens</code>)</td>
 <td>HTTP <code>Authorization</code> header + JSON body</td>
-<td>Requires <code>trust === &quot;trusted&quot;</code> and <code>auth:mint</code> scope verified via SHA-256 + <code>timingSafeEqual</code>; rejects <code>trusted</code> for <code>contributor</code>/<code>viewer</code> roles</td>
-<td>HTTP <code>401</code> / <code>403</code> / <code>400</code>, audited</td>
+<td>Requires <code>trust === &quot;trusted&quot;</code> and <code>auth:mint</code> scope verified via SHA-256 + <code>timingSafeEqual</code>, rejecting <code>trusted</code> for <code>contributor</code> or <code>viewer</code> roles</td>
+<td>HTTP <code>401</code>, <code>403</code>, or <code>400</code>, audited</td>
 </tr>
 <tr>
 <td>Redeem one-time token (<code>POST /auth/exchange</code>)</td>
 <td>JSON body <code>token</code> (never argv or query string)</td>
-<td>Constant-time SHA-256 lookup, TTL check, atomic <code>used = true</code> before session issue</td>
-<td>HTTP <code>401</code> (<code>OTT_INVALID</code> / <code>OTT_EXPIRED</code>) or <code>409</code> (<code>OTT_ALREADY_USED</code>), audited</td>
+<td>Constant-time SHA-256 lookup, 64 KiB body limit, TTL check, atomic <code>used = true</code> before session issue</td>
+<td>HTTP <code>401</code> (<code>OTT_INVALID</code> / <code>OTT_EXPIRED</code>), <code>409</code> (<code>OTT_ALREADY_USED</code>), or <code>413</code></td>
 </tr>
 <tr>
 <td>Invoke privileged MCP tools (<code>profile_attach</code>, <code>plugin_load</code>, <code>plugin_unload</code>, <code>plugin_reload</code>, <code>quit</code>)</td>
-<td>HTTP <code>Authorization</code> + JSON-RPC <code>method</code> / <code>params.name</code></td>
-<td><code>checkUntrustedMcpGate</code> blocks <code>trust === &quot;untrusted&quot;</code> before incur/Chromium</td>
+<td>HTTP <code>Authorization</code> + single or batched JSON-RPC <code>tools/call</code></td>
+<td><code>checkUntrustedMcpGate</code> inspects both single objects and JSON-RPC batch arrays, blocking <code>trust === &quot;untrusted&quot;</code> before incur/Chromium</td>
 <td>HTTP <code>403</code> with JSON-RPC <code>-32003</code></td>
 </tr>
 <tr>
 <td>Write to shared Smithers Cloud object store (<code>https://build.smithers.sh</code>)</td>
 <td>GitHub event + <code>SMITHERS_CACHE_WRITE_TOKEN</code></td>
-<td>Exposed strictly on <code>push</code> to <code>main</code> or maintainer <code>workflow_dispatch</code>; never on <code>pull_request</code></td>
+<td>Exposed strictly on <code>push</code> to <code>main</code> or maintainer <code>workflow_dispatch</code>, never on <code>pull_request</code></td>
 <td>Read-only cache fallback on untrusted PRs</td>
 </tr>
 <tr>
 <td>Modify <code>protectedPaths</code> (<code>.github</code>, <code>.smithers</code>, <code>.agents</code>, <code>chromium/patches</code>, <code>native</code>)</td>
 <td>PR diff / Smithers Change</td>
-<td><code>S.Github.Policy</code> flags protected paths and restricts <code>todo</code>/merge actions to <code>maintainers: [&quot;roninjin10&quot;]</code></td>
+<td><code>S.Github.Policy</code> flags protected paths and restricts <code>todo</code> and merge actions to <code>maintainers: [&quot;roninjin10&quot;]</code></td>
 <td>Human maintainer approval required</td>
 </tr>
 <tr>
@@ -661,6 +676,8 @@ SMITHERS_TOKEN=... node scripts/mint-sandbox-auth.mjs --target smithers --ttlSec
 <p>Dub switched permanently onto Smithers Cloud: incremental smthrs targets backed by the shared build.smithers.sh object store, single-use one-time sandbox auth tokens, strict untrusted-vs-trusted cache isolation, Lighthouse-style Uphill backpressure, personalized Maintainer/Contributor/Viewer views, Obsidian wiki, and automated release and docs pipelines.</p>
 <p><strong>Verified commits:</strong></p>
 <ul>
+<li><code>edd58a7e</code> (2026-11-27) fix(ci): run Uphill via wevm/uphill@main and npx uphill@0.0.11</li>
+<li><code>a60429a1</code> (2026-11-27) feat(factory): switch Dub onto Smithers Cloud factory, Lighthouse backpressure, one-time sandbox auth, wiki, and Mythical History</li>
 <li><code>d84fad3e</code> (2026-11-26) feat(milestone-4): add Chromium push events, Smithers QuickJS code mode, Jev, BYO agent triggers, and TS plugins</li>
 </ul>
 <p><strong>Key artifacts:</strong> <code>.smithers/WORKSPACE.ts</code>, <code>.smithers/FACTORY.ts</code>, <code>.smithers/home.json</code>, <code>.agents/uphill/uphill.yaml</code>, <code>src/auth.ts</code>, <code>site/audit.html</code></p>
@@ -670,6 +687,16 @@ SMITHERS_TOKEN=... node scripts/mint-sandbox-auth.mjs --target smithers --ttlSec
 <th>Date</th>
 <th>Description</th>
 </tr></thead><tbody>
+<tr>
+<td><code>edd58a7e</code></td>
+<td>2026-11-27</td>
+<td>fix(ci): run Uphill via wevm/uphill@main and npx uphill@0.0.11</td>
+</tr>
+<tr>
+<td><code>a60429a1</code></td>
+<td>2026-11-27</td>
+<td>feat(factory): switch Dub onto Smithers Cloud factory, Lighthouse backpressure, one-time sandbox auth, wiki, and Mythical History</td>
+</tr>
 <tr>
 <td><code>d84fad3e</code></td>
 <td>2026-11-26</td>

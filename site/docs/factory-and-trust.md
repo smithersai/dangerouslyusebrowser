@@ -43,5 +43,5 @@ Merging from Smithers Cloud to GitHub `main` automatically runs `.github/workflo
 
 ## Related pages
 
-- [[start-here]]
-- [[cloud-mcp-and-auth]]
+- [start-here](https://dangerouslyusebrowser.smithers.sh/docs/start-here.md)
+- [cloud-mcp-and-auth](https://dangerouslyusebrowser.smithers.sh/docs/cloud-mcp-and-auth.md)

@@ -33,6 +33,6 @@ Milestone 4 added `NativeBridge.subscribe()` backed by persistent non-blocking `
 
 ## Related pages
 
-- [[start-here]]
-- [[chromium-seams]]
-- [[plugins-and-triggers]]
+- [start-here](https://dangerouslyusebrowser.smithers.sh/docs/start-here.md)
+- [chromium-seams](https://dangerouslyusebrowser.smithers.sh/docs/chromium-seams.md)
+- [plugins-and-triggers](https://dangerouslyusebrowser.smithers.sh/docs/plugins-and-triggers.md)

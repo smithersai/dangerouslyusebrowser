@@ -29,6 +29,6 @@ Following `docs/first-build.md`:
 
 ## Related pages
 
-- [[start-here]]
-- [[network-and-clock]]
-- [[actor-and-webmcp]]
+- [start-here](https://dangerouslyusebrowser.smithers.sh/docs/start-here.md)
+- [network-and-clock](https://dangerouslyusebrowser.smithers.sh/docs/network-and-clock.md)
+- [actor-and-webmcp](https://dangerouslyusebrowser.smithers.sh/docs/actor-and-webmcp.md)

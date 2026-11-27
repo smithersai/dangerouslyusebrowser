@@ -306,3 +306,130 @@ test('fuzz: TokenAuthority enforces atomic single-use, replay rejection, and unt
     assert.equal(authority.verifyAuthorization(garbage), null);
   }
 });
+
+test('fuzz: untrusted MCP JSON-RPC gate blocks every privileged tool across 120 randomized payloads', async t => {
+  const rng = mulberry32(0xcafef00d);
+  const authority = new TokenAuthority({ staticToken: 'dub-master-gate-fuzz-0123456789' });
+  const cli = createCommands(new Browser(new NativeBridge('/tmp/nonexistent-dub-gate.sock', 200)), {
+    methods: ['browser.info', 'profile.attach', 'plugin.load', 'browser.quit'],
+  });
+  const server = await listen(cli.fetch, { host: '127.0.0.1', port: 0, authority });
+  t.after(() => server.close());
+
+  const minted = authority.mintOneTimeToken({ principal: 'fork-pr-fuzz', role: 'contributor', ttlMs: 60_000 });
+  const { sessionToken } = authority.redeemOneTimeToken(minted.oneTimeToken);
+  const forbidden = ['profile_attach', 'plugin_load', 'plugin_unload', 'plugin_reload', 'quit'];
+
+  for (let i = 0; i < 120; i++) {
+    const tool = forbidden[Math.floor(rng() * forbidden.length)];
+    const isBatch = rng() < 0.35;
+    const call = { jsonrpc: '2.0', id: i + 1, method: 'tools/call', params: { name: tool, arguments: { noise: rng() } } };
+    const payload = isBatch
+      ? [{ jsonrpc: '2.0', id: `safe-${i}`, method: 'tools/list', params: {} }, call]
+      : call;
+    const res = await fetch(`${server.url}/mcp`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${sessionToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    assert.equal(res.status, 403, `Expected 403 for untrusted ${tool} (batch=${isBatch}), got ${res.status}`);
+    const body = await res.json();
+    assert.equal(body.error?.code, -32003);
+  }
+});
+
+test('fuzz: HTTP auth endpoints resist malformed JSON, invalid methods, and oversized payloads', async t => {
+  const authority = new TokenAuthority({ staticToken: 'dub-http-edge-fuzz-0123456789' });
+  const cli = createCommands(new Browser(new NativeBridge('/tmp/nonexistent-dub-edge.sock', 200)), {
+    methods: ['browser.info'],
+  });
+  const server = await listen(cli.fetch, { host: '127.0.0.1', port: 0, authority });
+  t.after(() => server.close());
+
+  // Malformed JSON at /auth/exchange must return 400 (never 500)
+  for (const raw of ['', '{', '[]', '"str"', 'null', '{"oneTimeToken":123}', '{"oneTimeToken":"dub_ott_invalid"}']) {
+    const res = await fetch(`${server.url}/auth/exchange`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: raw,
+    });
+    assert.ok(res.status === 400 || res.status === 401, `Unexpected status ${res.status} for payload ${raw}`);
+  }
+
+  // Wrong HTTP methods must return 405
+  for (const [method, path] of [
+    ['GET', '/auth/exchange'],
+    ['DELETE', '/auth/whoami'],
+    ['GET', '/auth/one-time-tokens'],
+    ['GET', '/auth/revoke'],
+  ]) {
+    const res = await fetch(`${server.url}${path}`, {
+      method,
+      headers: { authorization: 'Bearer dub-http-edge-fuzz-0123456789' },
+    });
+    assert.equal(res.status, 405, `Expected 405 for ${method} ${path}, got ${res.status}`);
+  }
+
+  // Unauthenticated /auth/audit must return 401
+  const auditUnauth = await fetch(`${server.url}/auth/audit`);
+  assert.equal(auditUnauth.status, 401);
+
+  // Oversized body (> 64 KiB on auth exchange) must fail cleanly without crashing the server
+  const bigRes = await fetch(`${server.url}/auth/exchange`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ oneTimeToken: 'x'.repeat(100_000) }),
+  });
+  assert.ok(bigRes.status === 400 || bigRes.status === 401 || bigRes.status === 413);
+
+  // Server still responds cleanly to /health after abuse
+  const health = await fetch(`${server.url}/health`, {
+    headers: { authorization: 'Bearer dub-http-edge-fuzz-0123456789' },
+  });
+  assert.equal(health.status, 200);
+});
+
+test('fuzz: Smithers Home.read() handles 100 malformed, oversized, and injection schemas cleanly', async () => {
+  const { Home } = await import('@smthrs/views');
+  const rng = mulberry32(0x1337beef);
+  const badInputs = [
+    '',
+    'not json',
+    '{}',
+    '[]',
+    'null',
+    JSON.stringify({ docs: 'javascript:alert(1)', sections: [] }),
+    JSON.stringify({ sections: [{ audience: 'superadmin', blocks: [] }] }),
+    JSON.stringify({ sections: [{ audience: 'everyone', blocks: [{ type: 'raw_html', html: '<script>alert(1)</script>' }] }] }),
+  ];
+
+  for (const input of badInputs) {
+    const res = Home.read(input);
+    assert.ok(res && typeof res._tag === 'string');
+    if (res._tag === 'Declared') {
+      assert.equal(JSON.stringify(res).includes('<script>'), false);
+    }
+  }
+
+  const blockTypes = ['hero', 'code', 'cards', 'links', 'stats', 'unknown', 'script', 42, null];
+  const audiences = ['everyone', 'contributor', 'maintainer', 'root', '', null];
+  for (let i = 0; i < 100; i++) {
+    const candidate = {
+      docs: rng() < 0.5 ? 'https://dangerouslyusebrowser.smithers.sh/llms.txt' : 'ftp://bad.example/file',
+      contributors: rng() < 0.5 ? 'role' : 'invalid',
+      sections: [
+        {
+          title: rng() < 0.5 ? `Sec ${i}` : undefined,
+          audience: audiences[Math.floor(rng() * audiences.length)],
+          blocks: Array.from({ length: Math.floor(rng() * 4) }, () => ({
+            type: blockTypes[Math.floor(rng() * blockTypes.length)],
+            title: `T${i}`,
+            text: `Body ${i}`,
+          })),
+        },
+      ],
+    };
+    const parsed = Home.read(JSON.stringify(candidate));
+    assert.ok(parsed && typeof parsed._tag === 'string');
+  }
+});

@@ -86,7 +86,7 @@ function gaugeSvg(score, size = 104) {
   const offset = circ * (1 - Math.max(0, Math.min(100, score)) / 100);
   return `
     <svg class="lh-gauge-svg" width="${size}" height="${size}" viewBox="0 0 100 100" aria-hidden="true">
-      <circle cx="50" cy="50" r="${r}" fill="${tier.bg}" stroke="rgba(255,255,255,0.08)" stroke-width="7" />
+      <circle cx="50" cy="50" r="${r}" fill="${tier.bg}" stroke="var(--border)" stroke-width="7" />
       <circle cx="50" cy="50" r="${r}" fill="none" stroke="${tier.color}" stroke-width="7"
         stroke-linecap="round"
         stroke-dasharray="${circ.toFixed(2)}"
@@ -202,17 +202,18 @@ const html = `<!doctype html>
   <meta name="description" content="Live Uphill Lighthouse-style backpressure audit report for Dub (smithersai/dangerouslyusebrowser).">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="styles.css">
+  <script src="theme.js"></script>
   <style>
     .lh-banner { margin-top: 26px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 26px 28px; }
     .lh-top { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; justify-content: space-between; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
     .lh-top h1 { margin: 4px 0 8px; font-size: 28px; }
     .lh-top p { margin: 0; color: var(--muted); max-width: 60ch; }
-    .lh-composite { display: flex; align-items: center; gap: 14px; background: rgba(255,255,255,0.025); border: 1px solid var(--line); border-radius: 14px; padding: 12px 18px; }
+    .lh-composite { display: flex; align-items: center; gap: 14px; background: var(--code-bg); border: 1px solid var(--line); border-radius: 14px; padding: 12px 18px; }
     .lh-composite-meta strong { display: block; font-size: 14px; color: var(--fg); }
     .lh-composite-meta span { display: block; font-size: 12px; color: var(--muted); }
     .lh-gauges { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; padding-top: 24px; }
-    .lh-gauge-card { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; text-decoration: none; padding: 16px 10px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255,255,255,0.02); transition: transform 0.15s, border-color 0.15s; }
-    .lh-gauge-card:hover { transform: translateY(-2px); border-color: rgba(255,255,255,0.22); }
+    .lh-gauge-card { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; text-decoration: none; padding: 16px 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); transition: transform 0.15s, border-color 0.15s; }
+    .lh-gauge-card:hover { transform: translateY(-2px); border-color: var(--subtle); }
     .lh-gauge-title { font-size: 13px; font-weight: 600; color: var(--fg); line-height: 1.3; }
     .lh-gauge-pill, .lh-cat-badge { font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
     .lh-pass { color: #0cce6b; background: rgba(12, 206, 107, 0.13); border: 1px solid rgba(12, 206, 107, 0.35); }
@@ -239,16 +240,21 @@ const html = `<!doctype html>
     .lh-opp-main strong { display: block; font-size: 13.5px; color: var(--fg); }
     .lh-opp-main span { font-size: 12px; color: var(--muted); }
     .lh-opp-delta { display: flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 12px; }
-    .lh-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0 12px; }
+    .lh-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 24px 0 12px; }
     .lh-filter-btn { background: var(--surface); border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 6px 14px; font-size: 12.5px; cursor: pointer; }
     .lh-filter-btn.active { color: var(--fg); border-color: var(--accent, #f59e0b); background: rgba(245, 158, 11, 0.12); }
+    .lh-expand-btn { margin-left: auto; background: var(--surface); border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 6px 14px; font-size: 12px; font-family: var(--mono); cursor: pointer; }
+    .lh-expand-btn:hover { color: var(--fg); border-color: var(--subtle); }
+    .lh-repro-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); margin: 18px 0; font-size: 12.5px; }
+    .lh-repro-bar code { font-size: 12px; }
+    .lh-repro-links { margin-left: auto; display: flex; flex-wrap: wrap; gap: 12px; font-size: 12.5px; }
     .lh-category { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; margin-bottom: 18px; }
     .lh-cat-head { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
     .lh-cat-head h2 { margin: 0 0 4px; font-size: 19px; }
     .lh-cat-head p { margin: 0; font-size: 13px; color: var(--muted); }
     .lh-cat-badge { margin-left: auto; font-size: 13px; padding: 5px 12px; }
     .lh-metric-list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
-    .lh-metric { border: 1px solid var(--line); border-radius: 10px; background: rgba(255,255,255,0.015); overflow: hidden; }
+    .lh-metric { border: 1px solid var(--line); border-radius: 10px; background: var(--bg); overflow: hidden; }
     .lh-metric-summary { display: flex; align-items: center; gap: 10px; padding: 11px 14px; cursor: pointer; list-style: none; font-size: 13.5px; }
     .lh-metric-summary::-webkit-details-marker { display: none; }
     .lh-status-dot { width: 10px; height: 10px; border-radius: 999px; flex-shrink: 0; }
@@ -261,12 +267,13 @@ const html = `<!doctype html>
     .lh-metric-body { padding: 0 14px 14px 34px; border-top: 1px solid var(--line); }
     .lh-metric-desc { margin: 10px 0; font-size: 13px; color: var(--muted); }
     .lh-items { display: flex; flex-direction: column; gap: 6px; }
-    .lh-item-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 7px; background: rgba(255,255,255,0.025); font-size: 12.5px; }
+    .lh-item-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 7px; background: var(--code-bg); font-size: 12.5px; }
     .lh-item-miss { background: rgba(255, 78, 66, 0.08); border: 1px solid rgba(255, 78, 66, 0.25); }
     .lh-item-name { color: var(--fg); }
     .lh-item-val { font-family: var(--mono); font-weight: 600; color: var(--fg); margin-left: auto; }
     .lh-item-target { font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
-    .lh-item-note { width: 100%; font-size: 12px; color: var(--accent); }
+    .lh-item-note { width: 100%; font-size: 12px; color: var(--muted); }
+    .lh-item-miss .lh-item-note { color: var(--accent); }
     .lh-raw-receipt { margin-top: 28px; }
     .lh-raw-receipt summary { cursor: pointer; font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
     .lh-raw-receipt pre { margin-top: 10px; max-height: 360px; overflow: auto; background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px; padding: 14px; font-size: 11.5px; color: var(--fg); }
@@ -286,6 +293,7 @@ const html = `<!doctype html>
         <a href="/history">Mythical History</a>
         <a href="/llms.txt">llms.txt</a>
         <a href="https://smithers.sh/smithersai/dangerouslyusebrowser">Smithers Cloud</a>
+        <button class="theme-btn" id="theme-toggle" type="button">Dark</button>
       </nav>
     </header>
 
@@ -347,6 +355,17 @@ const html = `<!doctype html>
         </div>
       </section>
 
+      <div class="lh-repro-bar" aria-label="Reproduce audit locally">
+        <span>Reproduce locally:</span>
+        <code id="lh-repro-cmd">uphill check &amp;&amp; uphill --compact --require-targets --require-baseline</code>
+        <button class="lh-filter-btn" id="lh-copy-cmd" type="button">Copy</button>
+        <div class="lh-repro-links">
+          <a href="/docs/lighthouse-audit.md">Markdown receipt</a>
+          <a href="/audit-summary.json">Summary JSON</a>
+          <a href="https://github.com/smithersai/dangerouslyusebrowser/actions/workflows/uphill.yml">CI workflow</a>
+        </div>
+      </div>
+
       <section class="lh-panel">
         <h2>Opportunities (${opportunities.length})</h2>
         ${oppHtml}
@@ -356,6 +375,7 @@ const html = `<!doctype html>
         <button class="lh-filter-btn active" data-filter="all" type="button">All audits (${totalMetrics})</button>
         <button class="lh-filter-btn" data-filter="pass" type="button">Passing (${passingMetrics})</button>
         <button class="lh-filter-btn" data-filter="nonpass" type="button">Missed / Needs work (${totalMetrics - passingMetrics})</button>
+        <button class="lh-expand-btn" id="lh-toggle-all" type="button" data-expanded="false">Expand all</button>
       </div>
 
       ${categorySectionsHtml}
@@ -387,6 +407,27 @@ const html = `<!doctype html>
           });
         });
       });
+
+      const toggleAll = document.getElementById('lh-toggle-all');
+      if (toggleAll) {
+        toggleAll.addEventListener('click', () => {
+          const next = toggleAll.dataset.expanded !== 'true';
+          toggleAll.dataset.expanded = String(next);
+          toggleAll.textContent = next ? 'Collapse all' : 'Expand all';
+          metrics.forEach(m => { m.open = next; });
+        });
+      }
+
+      const copyBtn = document.getElementById('lh-copy-cmd');
+      const cmdEl = document.getElementById('lh-repro-cmd');
+      if (copyBtn && cmdEl) {
+        copyBtn.addEventListener('click', () => {
+          navigator.clipboard.writeText(cmdEl.textContent || '').then(() => {
+            copyBtn.textContent = 'Copied';
+            setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1400);
+          });
+        });
+      }
     })();
   </script>
 </body>

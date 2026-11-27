@@ -76,9 +76,14 @@ function checkUntrustedMcpGate(principal: AuthPrincipal | null, pathname: string
     return null;
   }
   try {
-    const msg = JSON.parse(bodyBuf.toString('utf8')) as { id?: unknown; method?: unknown; params?: { name?: unknown } };
-    if (msg.method === 'tools/call' && typeof msg.params?.name === 'string' && UNTRUSTED_FORBIDDEN_TOOLS.has(msg.params.name)) {
-      return { id: msg.id ?? null, tool: msg.params.name };
+    const parsed: unknown = JSON.parse(bodyBuf.toString('utf8'));
+    const messages = Array.isArray(parsed) ? parsed : [parsed];
+    for (const item of messages) {
+      if (!item || typeof item !== 'object') continue;
+      const msg = item as { id?: unknown; method?: unknown; params?: { name?: unknown } };
+      if (msg.method === 'tools/call' && typeof msg.params?.name === 'string' && UNTRUSTED_FORBIDDEN_TOOLS.has(msg.params.name)) {
+        return { id: msg.id ?? null, tool: msg.params.name };
+      }
     }
   } catch {
     // Non-JSON payloads are handled downstream by incur MCP parser.
@@ -108,15 +113,27 @@ export type ListenHandle = {
 };
 
 async function handleExchange(req: IncomingMessage, res: ServerResponse, authority: TokenAuthority): Promise<void> {
-  let parsed: { token?: unknown };
+  let raw: Buffer;
   try {
-    parsed = JSON.parse((await readBody(req, 64 * 1024)).toString('utf8')) as { token?: unknown };
+    raw = await readBody(req, 64 * 1024);
+  } catch {
+    sendJson(res, 413, { error: { code: 'PAYLOAD_TOO_LARGE', message: 'Request body exceeds 64 KiB limit' } });
+    return;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw.toString('utf8'));
   } catch {
     sendJson(res, 400, { error: { code: 'INVALID_JSON', message: 'Expected JSON body with one-time token' } });
     return;
   }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    sendJson(res, 400, { error: { code: 'INVALID_JSON', message: 'Expected JSON object with one-time token' } });
+    return;
+  }
+  const token = (parsed as { token?: unknown }).token;
   try {
-    const redeemed = authority.redeemOneTimeToken(typeof parsed.token === 'string' ? parsed.token : '');
+    const redeemed = authority.redeemOneTimeToken(typeof token === 'string' ? token : '');
     sendJson(res, 200, { sessionToken: redeemed.sessionToken, principal: redeemed.principal });
   } catch (error) {
     if (error instanceof AuthError) {
@@ -166,6 +183,14 @@ async function handleMintRoute(
   }
 }
 
+const AUTH_ALLOWED_METHODS: Record<string, string> = {
+  '/auth/exchange': 'POST',
+  '/auth/one-time-tokens': 'POST',
+  '/auth/whoami': 'GET',
+  '/auth/revoke': 'POST',
+  '/auth/audit': 'GET',
+};
+
 async function handleAuthRoutes(
   req: IncomingMessage,
   res: ServerResponse,
@@ -174,15 +199,25 @@ async function handleAuthRoutes(
   principal: AuthPrincipal | null,
   authRequired: boolean
 ): Promise<boolean> {
-  if (pathname === '/auth/exchange' && req.method === 'POST') {
+  const allowedMethod = AUTH_ALLOWED_METHODS[pathname];
+  if (allowedMethod && req.method !== allowedMethod) {
+    sendJson(
+      res,
+      405,
+      { error: { code: 'METHOD_NOT_ALLOWED', message: `Use ${allowedMethod} for ${pathname}` } },
+      { allow: allowedMethod }
+    );
+    return true;
+  }
+  if (pathname === '/auth/exchange') {
     await handleExchange(req, res, authority);
     return true;
   }
-  if (pathname === '/auth/one-time-tokens' && req.method === 'POST') {
+  if (pathname === '/auth/one-time-tokens') {
     await handleMintRoute(req, res, authority, principal, authRequired);
     return true;
   }
-  if (pathname === '/auth/whoami' && req.method === 'GET') {
+  if (pathname === '/auth/whoami') {
     if (authRequired && !principal) {
       sendJson(res, 401, { error: { code: 'UNAUTHORIZED', message: 'Authentication required' } }, { 'www-authenticate': 'Bearer' });
       return true;
@@ -202,7 +237,7 @@ async function handleAuthRoutes(
     });
     return true;
   }
-  if (pathname === '/auth/revoke' && req.method === 'POST') {
+  if (pathname === '/auth/revoke') {
     if (!principal || principal.kind !== 'session') {
       sendJson(res, 400, { error: { code: 'NO_REVOCABLE_SESSION', message: 'Active session token required' } });
       return true;
@@ -210,7 +245,7 @@ async function handleAuthRoutes(
     sendJson(res, 200, { revoked: authority.revokeSession(principal.tokenId), tokenId: principal.tokenId });
     return true;
   }
-  if (pathname === '/auth/audit' && req.method === 'GET') {
+  if (pathname === '/auth/audit') {
     if (authRequired && (!principal || principal.trust !== 'trusted' || !principal.scopes.includes('auth:mint'))) {
       sendJson(res, principal ? 403 : 401, {
         error: { code: principal ? 'AUTH_FORBIDDEN' : 'UNAUTHORIZED', message: 'Trusted auth:mint scope required' },

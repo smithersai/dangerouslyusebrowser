@@ -1,6 +1,6 @@
 # Dub (DangerouslyUseBrowser)
 
-> Real Chromium 157.0.8082.0 fork exposing browser internals directly to agents through native C++20 N-API bindings and an incur MCP server. Built publicly on Smithers Cloud at https://smithers.sh/smithersai/dangerouslyusebrowser.
+> Real Chromium 157.0.8082.0 fork exposing browser internals directly to agents through native C++20 N-API bindings and an incur MCP server. Built publicly on Smithers Cloud at https://smithers.sh/smithersai/dangerouslyusebrowser with interactive Lighthouse audit at https://dangerouslyusebrowser.smithers.sh/audit.
 
 ## Engineering Wiki
 
@@ -14,16 +14,10 @@
 - [Smithers Cloud factory, object store, and trust model](https://dangerouslyusebrowser.smithers.sh/docs/factory-and-trust.md): Document incremental smthrs targets, build.smithers.sh cache isolation, Uphill Lighthouse backpressure, and automated releases.
 - [Mythical History](https://dangerouslyusebrowser.smithers.sh/docs/mythical-history.md): Chronological source-grounded history of Dub from verified jj commits and launch evidence.
 
-## Contracts and Specifications
+## Backpressure and Contracts
 
+- [Lighthouse Backpressure Audit](https://dangerouslyusebrowser.smithers.sh/docs/lighthouse-audit.md): Live Uphill audit scores across bridge safety, TypeScript quality, MCP security, fuzzing, and docs.
 - [Implementation Contract](https://dangerouslyusebrowser.smithers.sh/docs/spec.md): Original Dub architecture contract, demos, and release gates.
 - [Chromium 157 Seam Census](https://dangerouslyusebrowser.smithers.sh/docs/seams.md): Source-backed map of 32 pinned Chromium paths across eight browser seams.
 - [Acceptance Gates](https://dangerouslyusebrowser.smithers.sh/docs/acceptance.md): Exact browser test inventory covering BRIDGE, NET, CLOCK, ACTOR, WEBMCP, PROFILE, and INSTALL.
 - [Contributing and Trust Model](https://dangerouslyusebrowser.smithers.sh/docs/contributing.md): How external contributors work untrusted and how maintainer gates land changes.
-
-## Factory Surfaces
-
-- [Smithers Cloud Coding Factory](https://smithers.sh/smithersai/dangerouslyusebrowser): Public issues, TODO stack, flows, and personalized Maintainer/Contributor/Viewer views
-- [Lighthouse Backpressure Audit Report](https://dangerouslyusebrowser.smithers.sh/audit): Live Uphill audit scores across bridge safety, TypeScript, MCP security, fuzzing, and docs
-- [Project Wiki UI](https://dangerouslyusebrowser.smithers.sh/wiki): Interactive searchable engineering wiki
-- [Mythical History](https://dangerouslyusebrowser.smithers.sh/history): Verified chronological milestone ledger

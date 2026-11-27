@@ -25,6 +25,6 @@ Verified capabilities (`tests/browser/milestone-3-clock.test.mjs`):
 
 ## Related pages
 
-- [[chromium-seams]]
-- [[actor-and-webmcp]]
-- [[plugins-and-triggers]]
+- [chromium-seams](https://dangerouslyusebrowser.smithers.sh/docs/chromium-seams.md)
+- [actor-and-webmcp](https://dangerouslyusebrowser.smithers.sh/docs/actor-and-webmcp.md)
+- [plugins-and-triggers](https://dangerouslyusebrowser.smithers.sh/docs/plugins-and-triggers.md)

@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-11-27T08:01:52Z",
-  "compositeScore": 98,
+  "generatedAt": "2026-11-27T08:21:28Z",
+  "compositeScore": 99,
   "passingMetrics": 19,
   "totalMetrics": 19,
   "opportunities": 0,
@@ -23,7 +23,7 @@
     {
       "name": "testing-and-fuzz",
       "title": "Testing & Fuzzing",
-      "score": 93
+      "score": 95
     },
     {
       "name": "docs-and-footprint",

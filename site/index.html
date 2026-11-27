@@ -7,6 +7,7 @@
   <meta name="description" content="A real Chromium 157 fork with native C++20 N-API bindings, incur MCP server, one-time sandbox auth, and public Smithers Cloud coding factory with Lighthouse backpressure.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="styles.css">
+  <script src="theme.js"></script>
 </head>
 <body>
   <div class="wrap">
@@ -22,6 +23,7 @@
         <a href="/history">Mythical History</a>
         <a href="/llms.txt">llms.txt</a>
         <a href="https://smithers.sh/smithersai/dangerouslyusebrowser">Smithers Cloud</a>
+        <button class="theme-btn" id="theme-toggle" type="button">Dark</button>
       </nav>
     </header>
 
@@ -46,8 +48,67 @@
         <a class="cta-btn" href="/history">Mythical History</a>
       </div>
 
-      <div class="arch" role="img" aria-label="Architecture: Agent to dub serve MCP with one-time auth to incur to TypeScript to C++20 N-API to forked Chromium 157">
-        Agent <span>&rarr;</span> One-Time Auth <span>&rarr;</span> dub serve /mcp <span>&rarr;</span> QuickJS + incur <span>&rarr;</span> C++20 N-API <span>&rarr;</span> Forked Chromium 157
+      <div class="arch-diagram" role="img" aria-label="Architecture diagram showing Dub runtime path from BYO Agent through One-Time Auth, incur MCP, QuickJS, C++20 N-API, and Forked Chromium 157, alongside the Smithers Cloud Coding Factory pipeline">
+        <svg viewBox="0 0 820 198" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 1 2 L 8 5 L 1 8 z" fill="var(--subtle)" />
+            </marker>
+          </defs>
+          <text x="12" y="18" fill="var(--subtle)" font-family="var(--mono)" font-size="10.5" font-weight="600" letter-spacing="0.06em">RUNTIME PATH (BROWSER INTERNALS)</text>
+          <rect x="12" y="28" width="120" height="52" rx="8" fill="var(--code-bg)" stroke="var(--border)" />
+          <text x="72" y="51" text-anchor="middle" fill="var(--ink)" font-family="var(--sans)" font-size="12" font-weight="600">BYO Agent</text>
+          <text x="72" y="67" text-anchor="middle" fill="var(--muted)" font-family="var(--mono)" font-size="10">Claude / Codex</text>
+
+          <line x1="132" y1="54" x2="156" y2="54" stroke="var(--subtle)" stroke-width="1.4" marker-end="url(#arr)" />
+
+          <rect x="160" y="28" width="134" height="52" rx="8" fill="var(--ok-soft)" stroke="var(--ok)" stroke-opacity="0.45" />
+          <text x="227" y="51" text-anchor="middle" fill="var(--ink)" font-family="var(--sans)" font-size="12" font-weight="600">One-Time Auth</text>
+          <text x="227" y="67" text-anchor="middle" fill="var(--ok)" font-family="var(--mono)" font-size="10">SHA-256 single-use</text>
+
+          <line x1="294" y1="54" x2="318" y2="54" stroke="var(--subtle)" stroke-width="1.4" marker-end="url(#arr)" />
+
+          <rect x="322" y="28" width="142" height="52" rx="8" fill="var(--code-bg)" stroke="var(--border)" />
+          <text x="393" y="51" text-anchor="middle" fill="var(--ink)" font-family="var(--sans)" font-size="12" font-weight="600">incur + QuickJS</text>
+          <text x="393" y="67" text-anchor="middle" fill="var(--muted)" font-family="var(--mono)" font-size="10">/mcp + Jev + plugins</text>
+
+          <line x1="464" y1="54" x2="488" y2="54" stroke="var(--subtle)" stroke-width="1.4" marker-end="url(#arr)" />
+
+          <rect x="492" y="28" width="128" height="52" rx="8" fill="var(--code-bg)" stroke="var(--border)" />
+          <text x="556" y="51" text-anchor="middle" fill="var(--ink)" font-family="var(--sans)" font-size="12" font-weight="600">C++20 N-API</text>
+          <text x="556" y="67" text-anchor="middle" fill="var(--muted)" font-family="var(--mono)" font-size="10">AF_UNIX framed IO</text>
+
+          <line x1="620" y1="54" x2="644" y2="54" stroke="var(--subtle)" stroke-width="1.4" marker-end="url(#arr)" />
+
+          <rect x="648" y="28" width="160" height="52" rx="8" fill="var(--accent-soft)" stroke="var(--accent-border)" />
+          <text x="728" y="51" text-anchor="middle" fill="var(--ink)" font-family="var(--sans)" font-size="12" font-weight="600">Forked Chromium 157</text>
+          <text x="728" y="67" text-anchor="middle" fill="var(--muted)" font-family="var(--mono)" font-size="10">Net, Clock, Actor, WebMCP</text>
+
+          <line x1="12" y1="100" x2="808" y2="100" stroke="var(--border)" stroke-dasharray="4 4" />
+          <text x="12" y="121" fill="var(--subtle)" font-family="var(--mono)" font-size="10.5" font-weight="600" letter-spacing="0.06em">SMITHERS CLOUD CODING FACTORY (PUBLIC + ZERO CACHE POISONING)</text>
+
+          <rect x="12" y="132" width="176" height="52" rx="8" fill="var(--code-bg)" stroke="var(--border)" />
+          <text x="100" y="155" text-anchor="middle" fill="var(--ink)" font-family="var(--sans)" font-size="12" font-weight="600">smithers.sh/api/mcp</text>
+          <text x="100" y="171" text-anchor="middle" fill="var(--muted)" font-family="var(--mono)" font-size="10">Issues, TODOs, PRs, stacks</text>
+
+          <line x1="188" y1="158" x2="212" y2="158" stroke="var(--subtle)" stroke-width="1.4" marker-end="url(#arr)" />
+
+          <rect x="216" y="132" width="194" height="52" rx="8" fill="var(--code-bg)" stroke="var(--border)" />
+          <text x="313" y="155" text-anchor="middle" fill="var(--ink)" font-family="var(--sans)" font-size="12" font-weight="600">build.smithers.sh Cache</text>
+          <text x="313" y="171" text-anchor="middle" fill="var(--muted)" font-family="var(--mono)" font-size="10">R/W trusted, R/O untrusted</text>
+
+          <line x1="410" y1="158" x2="434" y2="158" stroke="var(--subtle)" stroke-width="1.4" marker-end="url(#arr)" />
+
+          <rect x="438" y="132" width="172" height="52" rx="8" fill="var(--ok-soft)" stroke="var(--ok)" stroke-opacity="0.45" />
+          <text x="524" y="155" text-anchor="middle" fill="var(--ink)" font-family="var(--sans)" font-size="12" font-weight="600">Uphill Lighthouse</text>
+          <text x="524" y="171" text-anchor="middle" fill="var(--ok)" font-family="var(--mono)" font-size="10">99/100 composite gate</text>
+
+          <line x1="610" y1="158" x2="634" y2="158" stroke="var(--subtle)" stroke-width="1.4" marker-end="url(#arr)" />
+
+          <rect x="638" y="132" width="170" height="52" rx="8" fill="var(--code-bg)" stroke="var(--border)" />
+          <text x="723" y="155" text-anchor="middle" fill="var(--ink)" font-family="var(--sans)" font-size="12" font-weight="600">Auto Release + Docs</text>
+          <text x="723" y="171" text-anchor="middle" fill="var(--muted)" font-family="var(--mono)" font-size="10">GitHub mirror -> deploy</text>
+        </svg>
       </div>
 
       <p class="note">
@@ -147,6 +208,43 @@
         </div>
       </section>
 
+      <section id="connect" aria-label="Interactive BYO Agent and One-Time Sandbox Auth Builder">
+        <h2>Connect Your Agent (One-Time Sandbox Auth)</h2>
+        <p>
+          Pick your agent client and trust level below to generate exact commands for both Dub&rsquo;s single-use sandbox MCP server and Smithers Cloud MCP.
+        </p>
+
+        <div class="connect-shell">
+          <div class="connect-controls">
+            <div class="connect-group" role="group" aria-label="Agent client">
+              <span class="connect-label">Client</span>
+              <button class="persona-btn active" data-client="claude" type="button">Claude Code</button>
+              <button class="persona-btn" data-client="codex" type="button">Codex</button>
+              <button class="persona-btn" data-client="mcpjson" type="button">.mcp.json</button>
+            </div>
+            <div class="connect-group" role="group" aria-label="Trust level">
+              <span class="connect-label">Trust</span>
+              <button class="persona-btn active" data-trust="sandbox" type="button">Sandbox (OTT)</button>
+              <button class="persona-btn" data-trust="contributor" type="button">Contributor (Untrusted)</button>
+              <button class="persona-btn" data-trust="maintainer" type="button">Maintainer (Trusted)</button>
+            </div>
+          </div>
+          <div class="connect-body">
+            <div class="connect-meta" id="connect-scopes">
+              <span class="scope-pill ok">mcp:read</span>
+              <span class="scope-pill ok">mcp:write</span>
+              <span class="scope-pill ok">cache:read</span>
+              <span class="scope-pill blocked">cache:write</span>
+              <span class="scope-pill blocked">auth:mint</span>
+            </div>
+            <div class="code-block" style="margin:0;">
+              <pre><code id="connect-snippet"></code></pre>
+              <button class="copy-btn" type="button" data-copy style="opacity:1;">Copy</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section id="backpressure">
         <h2>Lighthouse Backpressure</h2>
         <p>
@@ -156,16 +254,16 @@
           <a class="audit-mini" data-cat="bridge-safety" href="/audit#cat-bridge-safety"><strong>100</strong><span>Bridge Safety</span></a>
           <a class="audit-mini" data-cat="typescript-quality" href="/audit#cat-typescript-quality"><strong>99</strong><span>TypeScript Quality</span></a>
           <a class="audit-mini" data-cat="mcp-security" href="/audit#cat-mcp-security"><strong>100</strong><span>MCP Security</span></a>
-          <a class="audit-mini" data-cat="testing-and-fuzz" href="/audit#cat-testing-and-fuzz"><strong>93</strong><span>Testing &amp; Fuzzing</span></a>
+          <a class="audit-mini" data-cat="testing-and-fuzz" href="/audit#cat-testing-and-fuzz"><strong>95</strong><span>Testing &amp; Fuzzing</span></a>
           <a class="audit-mini" data-cat="docs-and-footprint" href="/audit#cat-docs-and-footprint"><strong>100</strong><span>Docs &amp; Footprint</span></a>
         </div>
         <p><a href="/audit">Open the full interactive Lighthouse Audit Report &rarr;</a></p>
       </section>
 
-      <section id="demo-video" class="video-section" hidden>
+      <section id="demo-video" class="video-section">
         <h2>Demo</h2>
         <div class="video-frame">
-          <video id="dub-demo-player" controls playsinline preload="metadata" poster="assets/demo-01-network-rewrite.png">
+          <video id="dub-demo-player" controls playsinline preload="none" poster="assets/demo-01-network-rewrite.png">
             <source src="assets/dub-demo.mp4" type="video/mp4">
           </video>
         </div>
@@ -305,7 +403,7 @@ dub tools call --tab 1 actor.click --input '{"target":"Approve"}'</code></pre>
             <div class="stat-key">Pinned Chromium</div>
           </div>
           <div class="stat">
-            <div class="stat-val">37 / 37</div>
+            <div class="stat-val">46 / 46</div>
             <div class="stat-key">Bridge, fuzz &amp; auth tests</div>
           </div>
           <div class="stat">
@@ -412,11 +510,104 @@ dub tools call --tab 1 actor.click --input '{"target":"Approve"}'</code></pre>
       })
       .catch(() => {});
 
-    const video = document.getElementById('dub-demo-player');
-    const videoSection = document.getElementById('demo-video');
-    if (video && videoSection) {
-      video.addEventListener('loadedmetadata', () => { videoSection.hidden = false; });
-    }
+    (function () {
+      const clientBtns = Array.from(document.querySelectorAll('[data-client]'));
+      const trustBtns = Array.from(document.querySelectorAll('[data-trust]'));
+      const snippetEl = document.getElementById('connect-snippet');
+      const scopesEl = document.getElementById('connect-scopes');
+      if (!snippetEl || !scopesEl) return;
+
+      let activeClient = 'claude';
+      let activeTrust = 'sandbox';
+
+      const scopeMap = {
+        sandbox: {
+          ok: ['mcp:read', 'mcp:write', 'cache:read', 'single-use OTT'],
+          blocked: ['cache:write', 'auth:mint'],
+        },
+        contributor: {
+          ok: ['mcp:read', 'cache:read', 'untrusted-sandbox'],
+          blocked: ['cache:write', 'profile_attach', 'plugin_load', 'auth:mint'],
+        },
+        maintainer: {
+          ok: ['mcp:read', 'mcp:write', 'mcp:admin', 'auth:mint', 'cache:read', 'cache:write'],
+          blocked: [],
+        },
+      };
+
+      function buildSnippet(client, trust) {
+        if (client === 'mcpjson') {
+          return JSON.stringify(
+            {
+              mcpServers: {
+                'smithers-cloud': { type: 'http', url: 'https://smithers.sh/api/mcp' },
+                dub: {
+                  type: 'http',
+                  url: 'http://127.0.0.1:7777/mcp',
+                  headers: { Authorization: 'Bearer ${DUB_SESSION_TOKEN}' },
+                },
+              },
+            },
+            null,
+            2
+          );
+        }
+
+        const roleFlag =
+          trust === 'maintainer'
+            ? '--token-role maintainer --token-trust trusted'
+            : trust === 'contributor'
+              ? '--token-role contributor --token-trust untrusted'
+              : '--token-role sandbox --sandbox-id sb-01';
+
+        const mcpAdd =
+          client === 'codex'
+            ? [
+                'codex mcp add smithers-cloud --url https://smithers.sh/api/mcp',
+                'codex mcp add dub --url http://127.0.0.1:7777/mcp',
+              ]
+            : [
+                'claude mcp add --transport http smithers-cloud https://smithers.sh/api/mcp',
+                'claude mcp add --transport http dub http://127.0.0.1:7777/mcp',
+              ];
+
+        return [
+          `# 1. Start Dub and print a single-use bootstrap token (${trust})`,
+          `dub serve --port 7777 --print-one-time-token ${roleFlag}`,
+          '',
+          '# 2. Redeem the one-time token once for a scoped session token',
+          'dub auth exchange --url http://127.0.0.1:7777 --token "$DUB_ONE_TIME_TOKEN"',
+          '',
+          '# 3. Register Smithers Cloud MCP + Dub MCP in your agent',
+          ...mcpAdd,
+        ].join('\n');
+      }
+
+      function renderConnect() {
+        const s = scopeMap[activeTrust];
+        scopesEl.innerHTML = [
+          ...s.ok.map(k => `<span class="scope-pill ok">${k}</span>`),
+          ...s.blocked.map(k => `<span class="scope-pill blocked">${k}</span>`),
+        ].join('');
+        snippetEl.textContent = buildSnippet(activeClient, activeTrust);
+      }
+
+      clientBtns.forEach(btn =>
+        btn.addEventListener('click', () => {
+          activeClient = btn.dataset.client;
+          clientBtns.forEach(b => b.classList.toggle('active', b === btn));
+          renderConnect();
+        })
+      );
+      trustBtns.forEach(btn =>
+        btn.addEventListener('click', () => {
+          activeTrust = btn.dataset.trust;
+          trustBtns.forEach(b => b.classList.toggle('active', b === btn));
+          renderConnect();
+        })
+      );
+      renderConnect();
+    })();
   </script>
 </body>
 </html>

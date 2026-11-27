@@ -162,6 +162,15 @@ const testCliScripts = S.Shell.Test({
   timeout: "5m"
 })
 
+const testLaunch = S.Shell.Test({
+  summary: "Run launch socket guards, attachProfile ownership states, and Browser handshake tests",
+  bin: node,
+  args: ["--test", "tests/launch-and-browser.test.mjs"],
+  data: [nativeBuild, tsBuild, S.file("//tests/launch-and-browser.test.mjs")],
+  sandbox: "none",
+  timeout: "5m"
+})
+
 const overlayCheck = S.Shell.Test({
   summary: "Verify pinned Chromium 157 revision, unified patches, and leak-free overlay files",
   bin: node,
@@ -197,6 +206,7 @@ export const Package = S.Package({
     "test-auth": testAuth,
     "test-factory": testFactory,
     "test-cli-scripts": testCliScripts,
+    "test-launch": testLaunch,
     "overlay-check": overlayCheck,
     "cli-smoke": cliSmoke
   }

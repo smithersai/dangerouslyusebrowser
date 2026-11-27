@@ -257,6 +257,7 @@ const html = `<!doctype html>
   <meta name="description" content="Source-grounded Mythical History of Dub, the Chromium 157 fork built publicly on Smithers Cloud.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="styles.css">
+  <script src="theme.js"></script>
   <style>
     .chronicle-hero { padding: 36px 0 20px; border-bottom: 1px solid var(--line); }
     .chronicle-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 22px; }
@@ -303,6 +304,7 @@ const html = `<!doctype html>
         <a href="/history" aria-current="page">Mythical History</a>
         <a href="/llms.txt">llms.txt</a>
         <a href="https://smithers.sh/smithersai/dangerouslyusebrowser">Smithers Cloud</a>
+        <button class="theme-btn" id="theme-toggle" type="button">Dark</button>
       </nav>
     </header>
 

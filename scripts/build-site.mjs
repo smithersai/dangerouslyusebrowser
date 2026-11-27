@@ -26,3 +26,4 @@ run(uphillBin, ['--compact']);
 run(process.execPath, ['scripts/build-audit-report.mjs']);
 run(uphillBin, ['--compact']);
 run(process.execPath, ['scripts/build-audit-report.mjs']);
+run(process.execPath, ['scripts/build-knowledge.mjs']);

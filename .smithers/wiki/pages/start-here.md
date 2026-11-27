@@ -2,6 +2,21 @@
 
 Dub (**DangerouslyUseBrowser**) is a real Chromium `157.0.8082.0` fork that exposes browser internals directly to coding agents through native C++20 N-API bindings and an [incur](https://github.com/wevm/incur) MCP server. It is not Playwright, not a stock-CDP wrapper, and not Electron.
 
+```
+BYO Agent (Claude Code / Codex / Antigravity)
+   |
+   +--> Smithers Cloud MCP (https://smithers.sh/api/mcp)
+   |       Issues, TODOs, PRs, stacks, flows, shared cache (build.smithers.sh)
+   |
+   +--> Dub MCP Server (dub serve /mcp, single-use /auth/exchange token)
+           |
+           v
+        incur CLI + QuickJS REPL + Jev + TS Plugins (src/)
+           |
+           v  C++20 N-API v8 over AF_UNIX (native/dub.cc + addon.cc)
+        Forked Chromium 157.0.8082.0 (NetworkService, Per-Tab Clock, Actor, WebMCP)
+```
+
 ## Why a real Chromium fork
 
 Stock automation protocols sit outside the browser engine's privileged seams. Dub patches Chromium directly at the C++ browser, renderer, V8, Blink, and NetworkService boundaries so agents can:

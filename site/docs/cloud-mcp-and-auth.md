@@ -46,11 +46,11 @@ Every privileged operation in Dub and its Smithers Cloud factory traces back to 
 
 | Privileged step | Origin input | Boundary check | Failure behavior |
 | --- | --- | --- | --- |
-| Mint one-time sandbox token (`POST /auth/one-time-tokens`) | HTTP `Authorization` header + JSON body | Requires `trust === "trusted"` and `auth:mint` scope verified via SHA-256 + `timingSafeEqual`; rejects `trusted` for `contributor`/`viewer` roles | HTTP `401` / `403` / `400`, audited |
-| Redeem one-time token (`POST /auth/exchange`) | JSON body `token` (never argv or query string) | Constant-time SHA-256 lookup, TTL check, atomic `used = true` before session issue | HTTP `401` (`OTT_INVALID` / `OTT_EXPIRED`) or `409` (`OTT_ALREADY_USED`), audited |
-| Invoke privileged MCP tools (`profile_attach`, `plugin_load`, `plugin_unload`, `plugin_reload`, `quit`) | HTTP `Authorization` + JSON-RPC `method` / `params.name` | `checkUntrustedMcpGate` blocks `trust === "untrusted"` before incur/Chromium | HTTP `403` with JSON-RPC `-32003` |
-| Write to shared Smithers Cloud object store (`https://build.smithers.sh`) | GitHub event + `SMITHERS_CACHE_WRITE_TOKEN` | Exposed strictly on `push` to `main` or maintainer `workflow_dispatch`; never on `pull_request` | Read-only cache fallback on untrusted PRs |
-| Modify `protectedPaths` (`.github`, `.smithers`, `.agents`, `chromium/patches`, `native`) | PR diff / Smithers Change | `S.Github.Policy` flags protected paths and restricts `todo`/merge actions to `maintainers: ["roninjin10"]` | Human maintainer approval required |
+| Mint one-time sandbox token (`POST /auth/one-time-tokens`) | HTTP `Authorization` header + JSON body | Requires `trust === "trusted"` and `auth:mint` scope verified via SHA-256 + `timingSafeEqual`, rejecting `trusted` for `contributor` or `viewer` roles | HTTP `401`, `403`, or `400`, audited |
+| Redeem one-time token (`POST /auth/exchange`) | JSON body `token` (never argv or query string) | Constant-time SHA-256 lookup, 64 KiB body limit, TTL check, atomic `used = true` before session issue | HTTP `401` (`OTT_INVALID` / `OTT_EXPIRED`), `409` (`OTT_ALREADY_USED`), or `413` |
+| Invoke privileged MCP tools (`profile_attach`, `plugin_load`, `plugin_unload`, `plugin_reload`, `quit`) | HTTP `Authorization` + single or batched JSON-RPC `tools/call` | `checkUntrustedMcpGate` inspects both single objects and JSON-RPC batch arrays, blocking `trust === "untrusted"` before incur/Chromium | HTTP `403` with JSON-RPC `-32003` |
+| Write to shared Smithers Cloud object store (`https://build.smithers.sh`) | GitHub event + `SMITHERS_CACHE_WRITE_TOKEN` | Exposed strictly on `push` to `main` or maintainer `workflow_dispatch`, never on `pull_request` | Read-only cache fallback on untrusted PRs |
+| Modify `protectedPaths` (`.github`, `.smithers`, `.agents`, `chromium/patches`, `native`) | PR diff / Smithers Change | `S.Github.Policy` flags protected paths and restricts `todo` and merge actions to `maintainers: ["roninjin10"]` | Human maintainer approval required |
 | Publish npm package or deploy docs (`dangerouslyusebrowser.smithers.sh`) | Verified `main` commit merged by human maintainer | `release.yml` runs full `smthrs ci //...`, `npm test`, `uphill --require-targets`, and tarball rehearsal | Pipeline aborts on any non-zero exit |
 
 ## Connecting agents to Smithers Cloud MCP
@@ -59,5 +59,5 @@ Every privileged operation in Dub and its Smithers Cloud factory traces back to 
 
 ## Related pages
 
-- [[start-here]]
-- [[factory-and-trust]]
+- [start-here](https://dangerouslyusebrowser.smithers.sh/docs/start-here.md)
+- [factory-and-trust](https://dangerouslyusebrowser.smithers.sh/docs/factory-and-trust.md)

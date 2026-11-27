@@ -7,6 +7,7 @@
   <meta name="description" content="Source-grounded Mythical History of Dub, the Chromium 157 fork built publicly on Smithers Cloud.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="styles.css">
+  <script src="theme.js"></script>
   <style>
     .chronicle-hero { padding: 36px 0 20px; border-bottom: 1px solid var(--line); }
     .chronicle-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 22px; }
@@ -53,6 +54,7 @@
         <a href="/history" aria-current="page">Mythical History</a>
         <a href="/llms.txt">llms.txt</a>
         <a href="https://smithers.sh/smithersai/dangerouslyusebrowser">Smithers Cloud</a>
+        <button class="theme-btn" id="theme-toggle" type="button">Dark</button>
       </nav>
     </header>
 
@@ -69,7 +71,7 @@
         </p>
         <div class="chronicle-stats">
           <div class="chronicle-stat"><strong>7 Epochs</strong><span>Documented milestones</span></div>
-          <div class="chronicle-stat"><strong>12 Commits</strong><span>Verified jj ledger</span></div>
+          <div class="chronicle-stat"><strong>14 Commits</strong><span>Verified jj ledger</span></div>
           <div class="chronicle-stat"><strong>5 Patches</strong><span>Pinned Chromium 157.0.8082.0</span></div>
           <div class="chronicle-stat"><strong>Zero Slop</strong><span>Backed by real build receipts</span></div>
         </div>
@@ -198,7 +200,7 @@
           </div>
           <h2>The Smithers Cloud Factory Switchover</h2>
           <p>Dub switched permanently onto Smithers Cloud: incremental smthrs targets backed by the shared build.smithers.sh object store, single-use one-time sandbox auth tokens, strict untrusted-vs-trusted cache isolation, Lighthouse-style Uphill backpressure, personalized Maintainer/Contributor/Viewer views, Obsidian wiki, and automated release and docs pipelines.</p>
-          <div class="epoch-commits"><div class="commit-pill"><span class="sha">d84fad3e</span><span class="cdate">2026-11-26</span><span class="ctitle">feat(milestone-4): add Chromium push events, Smithers QuickJS code mode, Jev, BYO agent triggers, and TS plugins</span></div></div>
+          <div class="epoch-commits"><div class="commit-pill"><span class="sha">edd58a7e</span><span class="cdate">2026-11-27</span><span class="ctitle">fix(ci): run Uphill via wevm/uphill@main and npx uphill@0.0.11</span></div><div class="commit-pill"><span class="sha">a60429a1</span><span class="cdate">2026-11-27</span><span class="ctitle">feat(factory): switch Dub onto Smithers Cloud factory, Lighthouse backpressure, one-time sandbox auth, wiki, and Mythical History</span></div><div class="commit-pill"><span class="sha">d84fad3e</span><span class="cdate">2026-11-26</span><span class="ctitle">feat(milestone-4): add Chromium push events, Smithers QuickJS code mode, Jev, BYO agent triggers, and TS plugins</span></div></div>
           <div class="artifact-row"><code class="artifact-chip">.smithers/WORKSPACE.ts</code><code class="artifact-chip">.smithers/FACTORY.ts</code><code class="artifact-chip">.smithers/home.json</code><code class="artifact-chip">.agents/uphill/uphill.yaml</code><code class="artifact-chip">src/auth.ts</code><code class="artifact-chip">site/audit.html</code></div>
         </div>
       </article>
@@ -209,7 +211,9 @@
         <table class="ledger-table">
           <thead><tr><th>Commit</th><th>Date</th><th>Description</th></tr></thead>
           <tbody>
-            <tr><td><code>d84fad3e</code></td><td>2026-11-26</td><td>feat(milestone-4): add Chromium push events, Smithers QuickJS code mode, Jev, BYO agent triggers, and TS plugins</td></tr>
+            <tr><td><code>edd58a7e</code></td><td>2026-11-27</td><td>fix(ci): run Uphill via wevm/uphill@main and npx uphill@0.0.11</td></tr>
+<tr><td><code>a60429a1</code></td><td>2026-11-27</td><td>feat(factory): switch Dub onto Smithers Cloud factory, Lighthouse backpressure, one-time sandbox auth, wiki, and Mythical History</td></tr>
+<tr><td><code>d84fad3e</code></td><td>2026-11-26</td><td>feat(milestone-4): add Chromium push events, Smithers QuickJS code mode, Jev, BYO agent triggers, and TS plugins</td></tr>
 <tr><td><code>b138b7df</code></td><td>2026-11-24</td><td>feat(release): add dub install auto-downloader, prebuilt N-API binaries, fuzz tests, demo video, and docs site</td></tr>
 <tr><td><code>06d7c3cc</code></td><td>2026-11-23</td><td>feat(launch): add reproducible demos, launch evidence bundle, and verified README</td></tr>
 <tr><td><code>4d26d0c7</code></td><td>2026-11-23</td><td>feat(milestone-3): implement isolated per-tab engine clock across V8 and Blink</td></tr>

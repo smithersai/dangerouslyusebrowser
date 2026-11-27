@@ -147,6 +147,70 @@ function markdownToHtml(md) {
   return html.join('\n');
 }
 
+function rewriteWikilinksForLlms(md) {
+  return md
+    .replace(/\[\[([^|\]]+)\|([^\]]+)\]\]/g, (_, id, label) => `[${label.trim()}](${origin}/docs/${id.trim()}.md)`)
+    .replace(/\[\[([^\]]+)\]\]/g, (_, id) => `[${id.trim()}](${origin}/docs/${id.trim()}.md)`);
+}
+
+function buildLighthouseMarkdown() {
+  const reportPath = resolve(root, '.uphill/report.json');
+  if (!existsSync(reportPath)) return null;
+  const report = JSON.parse(readFileSync(reportPath, 'utf8'));
+  const categories = report.categories ?? [];
+  const composite =
+    categories.length > 0
+      ? Math.round(categories.reduce((acc, c) => acc + (c.score ?? 0), 0) / categories.length)
+      : 0;
+  const opportunities = report.opportunities ?? [];
+
+  const lines = [
+    '# Lighthouse Backpressure Audit',
+    '',
+    `Live composite score: **${composite} / 100** across **${categories.length} categories** with **${opportunities.length} open opportunities**.`,
+    '',
+    `Open the interactive SVG gauge dashboard at [dangerouslyusebrowser.smithers.sh/audit](${origin}/audit).`,
+    '',
+    '## Category Scores',
+    '',
+    '| Category | Score | Status | Focus |',
+    '| --- | --- | --- | --- |',
+  ];
+
+  for (const cat of categories) {
+    const status = cat.score >= 90 ? 'Passing' : cat.score >= 50 ? 'Needs Work' : 'Failing';
+    lines.push(`| ${cat.title} | **${cat.score}/100** | ${status} | ${cat.description} |`);
+  }
+
+  lines.push(
+    '',
+    '## Metric Breakdown',
+    ''
+  );
+
+  for (const cat of categories) {
+    lines.push(`### ${cat.title} (${cat.score}/100)`, '');
+    lines.push('| Metric | Score | Value | Target |', '| --- | --- | --- | --- |');
+    for (const m of cat.metrics ?? []) {
+      const val = m.kind === 'check' ? (m.value ? 'PASS' : 'FAIL') : m.unit ? `${m.value} ${m.unit}` : String(m.value ?? '');
+      const tgt = m.kind === 'check' ? 'PASS' : m.target === null || m.target === undefined ? 'Tracked' : `${m.better === 'higher' ? '>=' : '<='} ${m.target}${m.unit ? ` ${m.unit}` : ''}`;
+      lines.push(`| ${m.title} | ${m.score}/100 | \`${val}\` | \`${tgt}\` |`);
+    }
+    lines.push('');
+  }
+
+  lines.push(
+    '## Trust and Object Store Posture',
+    '',
+    '- **Shared object store**: `https://build.smithers.sh` serves incremental `smthrs` build and test results.',
+    '- **Untrusted execution**: Fork and external PR runs execute freely with read-only cache access (`SMITHERS_CACHE_READ_TOKEN` only) and never poison the cache or bypass maintainer gates.',
+    '- **Run locally**: `uphill check && uphill --compact --require-targets --require-baseline`',
+    ''
+  );
+
+  return lines.join('\n');
+}
+
 const pages = [];
 for (const entry of catalog.pages) {
   const docPath = resolve(root, entry.document);
@@ -161,7 +225,7 @@ for (const entry of catalog.pages) {
     }
   }
   const markdown = readFileSync(docPath, 'utf8');
-  writeFileSync(resolve(docsOutDir, `${entry.id}.md`), markdown, 'utf8');
+  writeFileSync(resolve(docsOutDir, `${entry.id}.md`), rewriteWikilinksForLlms(markdown), 'utf8');
   pages.push({
     ...entry,
     markdown,
@@ -174,7 +238,7 @@ for (const entry of catalog.pages) {
 const historyPath = resolve(root, '.smithers/wiki/mythical-history.md');
 if (existsSync(historyPath)) {
   const historyMd = readFileSync(historyPath, 'utf8');
-  writeFileSync(resolve(docsOutDir, 'mythical-history.md'), historyMd, 'utf8');
+  writeFileSync(resolve(docsOutDir, 'mythical-history.md'), rewriteWikilinksForLlms(historyMd), 'utf8');
   pages.push({
     id: 'mythical-history',
     title: 'Mythical History',
@@ -198,34 +262,39 @@ const extraDocs = [
 ];
 
 const extraLinks = [];
+const lighthouseMd = buildLighthouseMarkdown();
+if (lighthouseMd) {
+  writeFileSync(resolve(docsOutDir, 'lighthouse-audit.md'), lighthouseMd, 'utf8');
+  extraLinks.push({
+    id: 'lighthouse-audit',
+    title: 'Lighthouse Backpressure Audit',
+    src: '.uphill/report.json',
+    purpose: 'Live Uphill audit scores across bridge safety, TypeScript quality, MCP security, fuzzing, and docs.',
+    url: `${origin}/docs/lighthouse-audit.md`,
+    markdown: lighthouseMd,
+  });
+}
 for (const doc of extraDocs) {
   const srcPath = resolve(root, doc.src);
   if (!existsSync(srcPath)) continue;
   const content = readFileSync(srcPath, 'utf8');
-  writeFileSync(resolve(docsOutDir, `${doc.id}.md`), content, 'utf8');
+  writeFileSync(resolve(docsOutDir, `${doc.id}.md`), rewriteWikilinksForLlms(content), 'utf8');
   extraLinks.push({ ...doc, url: `${origin}/docs/${doc.id}.md`, markdown: content });
 }
 
-// 1. Emit site/llms.txt (consumed natively by smithers.sh DocsSource)
+// 1. Emit site/llms.txt (consumed natively by smithers.sh DocsSource: Markdown URLs only)
 const llmsLines = [
   '# Dub (DangerouslyUseBrowser)',
   '',
-  '> Real Chromium 157.0.8082.0 fork exposing browser internals directly to agents through native C++20 N-API bindings and an incur MCP server. Built publicly on Smithers Cloud at https://smithers.sh/smithersai/dangerouslyusebrowser.',
+  '> Real Chromium 157.0.8082.0 fork exposing browser internals directly to agents through native C++20 N-API bindings and an incur MCP server. Built publicly on Smithers Cloud at https://smithers.sh/smithersai/dangerouslyusebrowser with interactive Lighthouse audit at https://dangerouslyusebrowser.smithers.sh/audit.',
   '',
   '## Engineering Wiki',
   '',
   ...pages.map(p => `- [${p.title}](${p.url}): ${p.purpose}`),
   '',
-  '## Contracts and Specifications',
+  '## Backpressure and Contracts',
   '',
   ...extraLinks.map(d => `- [${d.title}](${d.url}): ${d.purpose}`),
-  '',
-  '## Factory Surfaces',
-  '',
-  `- [Smithers Cloud Coding Factory](https://smithers.sh/smithersai/dangerouslyusebrowser): Public issues, TODO stack, flows, and personalized Maintainer/Contributor/Viewer views`,
-  `- [Lighthouse Backpressure Audit Report](${origin}/audit): Live Uphill audit scores across bridge safety, TypeScript, MCP security, fuzzing, and docs`,
-  `- [Project Wiki UI](${origin}/wiki): Interactive searchable engineering wiki`,
-  `- [Mythical History](${origin}/history): Verified chronological milestone ledger`,
   '',
 ];
 writeFileSync(resolve(root, 'site/llms.txt'), `${llmsLines.join('\n')}`, 'utf8');
@@ -279,21 +348,22 @@ const wikiHtml = `<!doctype html>
   <meta name="description" content="Source-cited Obsidian-compatible engineering wiki for Dub (Chromium 157 fork, C++20 N-API, MCP one-time auth, and Smithers Cloud factory).">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="styles.css">
+  <script src="theme.js"></script>
   <style>
     .wiki-shell { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 28px; margin: 28px 0 56px; align-items: start; }
     .wiki-sidebar { position: sticky; top: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
-    .wiki-search { width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.04); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; color: var(--fg); font-size: 13px; margin-bottom: 12px; }
+    .wiki-search { width: 100%; box-sizing: border-box; background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; color: var(--fg); font-size: 13px; margin-bottom: 12px; }
     .wiki-search:focus { outline: none; border-color: var(--accent, #f59e0b); }
     .wiki-nav { display: flex; flex-direction: column; gap: 6px; }
     .wiki-nav-btn { text-align: left; background: transparent; border: 1px solid transparent; border-radius: 8px; padding: 10px 11px; cursor: pointer; color: var(--fg); transition: background 0.15s, border-color 0.15s; }
-    .wiki-nav-btn:hover { background: rgba(255,255,255,0.04); }
+    .wiki-nav-btn:hover { background: var(--code-bg); }
     .wiki-nav-btn.active { background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.35); }
     .wiki-nav-title { display: block; font-weight: 600; font-size: 13.5px; margin-bottom: 2px; }
     .wiki-nav-purpose { display: block; font-size: 11.5px; color: var(--muted); line-height: 1.4; }
     .wiki-article { display: none; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 28px 32px; }
     .wiki-article.active { display: block; }
     .wiki-article-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-bottom: 14px; margin-bottom: 18px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); }
-    .wiki-pill { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: #34d399; padding: 2px 9px; border-radius: 999px; font-weight: 600; font-size: 11px; }
+    .wiki-pill { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); color: var(--ok); padding: 2px 9px; border-radius: 999px; font-weight: 600; font-size: 11px; }
     .wiki-raw-link { margin-left: auto; color: var(--accent, #f59e0b); text-decoration: none; }
     .wiki-content h1 { margin-top: 0; font-size: 28px; }
     .wiki-content h2 { margin-top: 28px; font-size: 19px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
@@ -303,8 +373,9 @@ const wikiHtml = `<!doctype html>
     .wiki-content a:hover { text-decoration: underline; }
     .wiki-pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; overflow-x: auto; font-size: 12.5px; line-height: 1.55; color: var(--fg); }
     .wiki-table-wrap { overflow-x: auto; margin: 16px 0; }
-    .wiki-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .wiki-table th, .wiki-table td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+    .wiki-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: auto; }
+    .wiki-table th, .wiki-table td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+    .wiki-table td:first-child { white-space: normal; min-width: 130px; max-width: 220px; }
     .wiki-table th { color: var(--fg); font-weight: 600; background: var(--code-bg); }
     .wiki-quote { border-left: 3px solid var(--accent); margin: 14px 0; padding: 6px 14px; color: var(--muted); background: var(--accent-soft); border-radius: 0 8px 8px 0; }
     .wiki-inputs { margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--line); }
@@ -328,6 +399,7 @@ const wikiHtml = `<!doctype html>
         <a href="/history">Mythical History</a>
         <a href="/llms.txt">llms.txt</a>
         <a href="https://smithers.sh/smithersai/dangerouslyusebrowser">Smithers Cloud</a>
+        <button class="theme-btn" id="theme-toggle" type="button">Dark</button>
       </nav>
     </header>
 

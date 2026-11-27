@@ -82,6 +82,8 @@ Chromium gained a live AF_UNIX push event stream (dub_events) feeding a full Smi
 Dub switched permanently onto Smithers Cloud: incremental smthrs targets backed by the shared build.smithers.sh object store, single-use one-time sandbox auth tokens, strict untrusted-vs-trusted cache isolation, Lighthouse-style Uphill backpressure, personalized Maintainer/Contributor/Viewer views, Obsidian wiki, and automated release and docs pipelines.
 
 **Verified commits:**
+- `edd58a7e` (2026-11-27) fix(ci): run Uphill via wevm/uphill@main and npx uphill@0.0.11
+- `a60429a1` (2026-11-27) feat(factory): switch Dub onto Smithers Cloud factory, Lighthouse backpressure, one-time sandbox auth, wiki, and Mythical History
 - `d84fad3e` (2026-11-26) feat(milestone-4): add Chromium push events, Smithers QuickJS code mode, Jev, BYO agent triggers, and TS plugins
 
 **Key artifacts:** `.smithers/WORKSPACE.ts`, `.smithers/FACTORY.ts`, `.smithers/home.json`, `.agents/uphill/uphill.yaml`, `src/auth.ts`, `site/audit.html`
@@ -90,6 +92,8 @@ Dub switched permanently onto Smithers Cloud: incremental smthrs targets backed 
 
 | Commit | Date | Description |
 | --- | --- | --- |
+| `edd58a7e` | 2026-11-27 | fix(ci): run Uphill via wevm/uphill@main and npx uphill@0.0.11 |
+| `a60429a1` | 2026-11-27 | feat(factory): switch Dub onto Smithers Cloud factory, Lighthouse backpressure, one-time sandbox auth, wiki, and Mythical History |
 | `d84fad3e` | 2026-11-26 | feat(milestone-4): add Chromium push events, Smithers QuickJS code mode, Jev, BYO agent triggers, and TS plugins |
 | `b138b7df` | 2026-11-24 | feat(release): add dub install auto-downloader, prebuilt N-API binaries, fuzz tests, demo video, and docs site |
 | `06d7c3cc` | 2026-11-23 | feat(launch): add reproducible demos, launch evidence bundle, and verified README |
