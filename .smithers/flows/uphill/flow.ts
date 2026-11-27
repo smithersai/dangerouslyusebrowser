@@ -15,16 +15,12 @@ const implementationVersion = "uphill/v1"
 const uphillJob = CiJob.make("uphill", {
   steps: [
     {
-      name: "install-uphill",
-      run: "command -v uphill >/dev/null 2>&1 || curl -fsSL https://wevm.sh/uphill | sh"
-    },
-    {
       name: "uphill-check",
-      run: "PATH=\"$HOME/.uphill/bin:$HOME/.bun/bin:$PATH\" uphill check"
+      run: "PATH=\"$HOME/.uphill/bin:$HOME/.bun/bin:$PATH\"; (command -v uphill >/dev/null 2>&1 && uphill check) || npx --yes uphill@0.0.11 check"
     },
     {
       name: "uphill-compact",
-      run: "PATH=\"$HOME/.uphill/bin:$HOME/.bun/bin:$PATH\" uphill --compact"
+      run: "PATH=\"$HOME/.uphill/bin:$HOME/.bun/bin:$PATH\"; (command -v uphill >/dev/null 2>&1 && uphill --compact) || npx --yes uphill@0.0.11 --compact"
     },
     {
       name: "build-audit-report",

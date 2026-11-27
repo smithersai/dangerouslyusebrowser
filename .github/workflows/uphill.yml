@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   audit:
@@ -19,21 +20,20 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Install Uphill
+      - name: Run official Uphill action
+        uses: wevm/uphill@main
+      - name: Validate metric scripts and generate Lighthouse UI
         run: |
-          curl -fsSL https://wevm.sh/uphill | sh
-          echo "$HOME/.uphill/bin" >> "$GITHUB_PATH"
-      - name: Validate metric scripts
-        run: uphill check
-      - name: Run Uphill backpressure and generate Lighthouse UI
-        run: |
-          uphill --compact
+          npx --yes uphill@0.0.11 check
+          npx --yes uphill@0.0.11 --compact
           node scripts/build-audit-report.mjs
       - name: Publish Lighthouse summary
         if: always()
@@ -53,4 +53,5 @@ jobs:
             .uphill/report.md
             .uphill/report.html
             site/audit.html
+            site/audit-summary.json
           retention-days: 30

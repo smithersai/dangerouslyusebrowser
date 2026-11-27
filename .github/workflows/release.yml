@@ -82,15 +82,12 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-      - name: Install dependencies and Uphill
-        run: |
-          npm ci
-          curl -fsSL https://wevm.sh/uphill | sh
-          echo "$HOME/.uphill/bin" >> "$GITHUB_PATH"
+      - name: Install dependencies
+        run: npm ci
       - name: Rebuild site, wiki, Mythical History, llms.txt, and Lighthouse audit
         run: |
           node scripts/build-knowledge.mjs
-          uphill --compact
+          npx --yes uphill@0.0.11 --compact
           node scripts/build-audit-report.mjs
           ./node_modules/.bin/smthrs ci //.smithers:* --ui plain
       - name: Deploy site to dangerouslyusebrowser.smithers.sh
@@ -127,16 +124,13 @@ jobs:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
           cache: npm
-      - name: Install dependencies and Uphill
-        run: |
-          npm ci
-          curl -fsSL https://wevm.sh/uphill | sh
-          echo "$HOME/.uphill/bin" >> "$GITHUB_PATH"
+      - name: Install dependencies
+        run: npm ci
       - name: Run full trusted CI and Lighthouse backpressure gate
         run: |
           ./node_modules/.bin/smthrs ci //... --ui plain
           npm run build:native && npm run typecheck && npm run build && npm test
-          uphill --compact --require-targets
+          npx --yes uphill@0.0.11 --compact --require-targets
       - name: Pack and rehearse clean tarball install
         run: |
           tarball="$(npm pack --silent)"
