@@ -1,14 +1,17 @@
 // Copyright 2026 The Dub Authors. SPDX-License-Identifier: MIT
 #include "chrome/renderer/dub/dub_render_frame_observer.h"
 
+#include <algorithm>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "base/functional/bind.h"
 #include "base/json/json_reader.h"
 #include "base/json/json_writer.h"
+#include "base/memory/raw_ptr.h"
 #include "base/no_destructor.h"
 #include "base/values.h"
 #include "content/public/renderer/render_frame.h"
@@ -18,7 +21,9 @@
 #include "third_party/blink/public/web/web_document.h"
 #include "third_party/blink/public/web/web_element.h"
 #include "third_party/blink/public/web/web_local_frame.h"
+#include "third_party/blink/public/web/web_script_source.h"
 #include "third_party/blink/public/web/web_script_tool_types.h"
+#include "url/gurl.h"
 #include "v8/include/v8-container.h"
 #include "v8/include/v8-context.h"
 #include "v8/include/v8-exception.h"
@@ -33,6 +38,39 @@
 
 namespace dub {
 namespace {
+
+constexpr int32_t kDubIsolatedWorldId = 9001;
+
+bool MatchesWildcard(std::string_view text, std::string_view pattern) {
+  if (pattern.empty() || pattern == "*") {
+    return true;
+  }
+  if (pattern.find('*') == std::string_view::npos) {
+    return text.find(pattern) != std::string_view::npos;
+  }
+  size_t ti = 0;
+  size_t pi = 0;
+  size_t star_p = std::string_view::npos;
+  size_t star_t = 0;
+  while (ti < text.size()) {
+    if (pi < pattern.size() && pattern[pi] == text[ti]) {
+      ++ti;
+      ++pi;
+    } else if (pi < pattern.size() && pattern[pi] == '*') {
+      star_p = pi++;
+      star_t = ti;
+    } else if (star_p != std::string_view::npos) {
+      pi = star_p + 1;
+      ti = ++star_t;
+    } else {
+      return false;
+    }
+  }
+  while (pi < pattern.size() && pattern[pi] == '*') {
+    ++pi;
+  }
+  return pi == pattern.size();
+}
 
 std::string V8ToUtf8(v8::Isolate* isolate, v8::Local<v8::Value> value) {
   if (value.IsEmpty()) {
@@ -145,6 +183,66 @@ void OnPromiseSettled(const v8::FunctionCallbackInfo<v8::Value>& info) {
                                     "");
 }
 
+struct ExposedBindingEntry {
+  base::WeakPtr<DubRenderFrameObserver> observer;
+  std::string name;
+};
+
+std::map<uint64_t, ExposedBindingEntry>& ExposedBindings() {
+  static base::NoDestructor<std::map<uint64_t, ExposedBindingEntry>> map;
+  return *map;
+}
+
+uint64_t RegisterExposedBinding(ExposedBindingEntry entry) {
+  static uint64_t next_key = 1;
+  const uint64_t key = next_key++;
+  ExposedBindings().emplace(key, std::move(entry));
+  return key;
+}
+
+void OnExposedFunctionCalled(const v8::FunctionCallbackInfo<v8::Value>& info) {
+  v8::Isolate* isolate = info.GetIsolate();
+  v8::Local<v8::Context> context = isolate->GetCurrentContext();
+  v8::Local<v8::Promise::Resolver> resolver;
+  if (!v8::Promise::Resolver::New(context).ToLocal(&resolver)) {
+    return;
+  }
+  info.GetReturnValue().Set(resolver->GetPromise());
+
+  if (info.Data().IsEmpty() || !info.Data()->IsNumber()) {
+    std::ignore = resolver->Reject(
+        context, v8::Exception::Error(
+                     v8::String::NewFromUtf8Literal(isolate, "Invalid binding")));
+    return;
+  }
+  const uint64_t key =
+      static_cast<uint64_t>(info.Data()->NumberValue(context).FromMaybe(0));
+  auto it = ExposedBindings().find(key);
+  if (it == ExposedBindings().end() || !it->second.observer) {
+    std::ignore = resolver->Reject(
+        context, v8::Exception::Error(v8::String::NewFromUtf8Literal(
+                     isolate, "Dub exposed function frame is gone")));
+    return;
+  }
+
+  v8::Local<v8::Array> args = v8::Array::New(isolate, info.Length());
+  for (int i = 0; i < info.Length(); ++i) {
+    std::ignore = args->Set(context, i, info[i]);
+  }
+  std::string args_json = "[]";
+  std::string err;
+  if (!SerializeV8Value(isolate, context, args, &args_json, &err)) {
+    std::ignore = resolver->Reject(
+        context,
+        v8::Exception::TypeError(
+            v8::String::NewFromUtf8(isolate, err.c_str()).ToLocalChecked()));
+    return;
+  }
+
+  it->second.observer->HandleExposedCallFromV8(it->second.name, args_json,
+                                               isolate, context, resolver);
+}
+
 std::string ScriptToolErrorCodeName(blink::WebScriptToolErrorCode code) {
   switch (code) {
     case blink::WebScriptToolErrorCode::kInvalidToolName:
@@ -159,6 +257,23 @@ std::string ScriptToolErrorCodeName(blink::WebScriptToolErrorCode code) {
       return "TOOL_CANCELED";
   }
   return "TOOL_FAILED";
+}
+
+v8::Local<v8::Context> GetContextForWorld(blink::WebLocalFrame* frame,
+                                          v8::Isolate* isolate,
+                                          bool isolated_world) {
+  if (!isolated_world) {
+    return frame->MainWorldScriptContext();
+  }
+  v8::Local<v8::Value> global =
+      frame->ExecuteScriptInIsolatedWorldAndReturnValue(
+          kDubIsolatedWorldId,
+          blink::WebScriptSource(blink::WebString::FromUtf8("globalThis")),
+          blink::BackForwardCacheAware::kAllow);
+  if (!global.IsEmpty() && global->IsObject()) {
+    return global.As<v8::Object>()->GetCreationContextChecked();
+  }
+  return v8::Local<v8::Context>();
 }
 
 }  // namespace
@@ -179,6 +294,11 @@ DubRenderFrameObserver::~DubRenderFrameObserver() {
 void DubRenderFrameObserver::OnDubRenderFrameRequest(
     mojo::PendingAssociatedReceiver<dub::mojom::DubRenderFrame> receiver) {
   receivers_.Add(this, std::move(receiver));
+}
+
+void DubRenderFrameObserver::DidClearWindowObject() {
+  InstallExposedBindingsInCurrentContext();
+  RunInitScriptsForCurrentDocument();
 }
 
 void DubRenderFrameObserver::DidStartNavigation(
@@ -224,8 +344,183 @@ void DubRenderFrameObserver::ResolvePendingEval(uint64_t eval_id,
   std::move(cb).Run(std::move(res));
 }
 
+void DubRenderFrameObserver::HandleExposedCallFromV8(
+    const std::string& name,
+    const std::string& args_json,
+    v8::Isolate* isolate,
+    v8::Local<v8::Context> context,
+    v8::Local<v8::Promise::Resolver> resolver) {
+  if (!exposed_host_.is_bound()) {
+    std::ignore = resolver->Reject(
+        context, v8::Exception::Error(v8::String::NewFromUtf8Literal(
+                     isolate, "Dub exposed host is disconnected")));
+    return;
+  }
+
+  struct ResolverState {
+    raw_ptr<v8::Isolate> isolate = nullptr;
+    v8::Global<v8::Context> context;
+    v8::Global<v8::Promise::Resolver> resolver;
+  };
+  auto state = std::make_unique<ResolverState>();
+  state->isolate = isolate;
+  state->context.Reset(isolate, context);
+  state->resolver.Reset(isolate, resolver);
+
+  exposed_host_->Call(
+      name, args_json,
+      base::BindOnce(
+          [](base::WeakPtr<DubRenderFrameObserver> self,
+             std::unique_ptr<ResolverState> st, bool ok,
+             const std::string& result_json, const std::string& error) {
+            if (!self || !st || !st->isolate) {
+              return;
+            }
+            v8::Isolate* iso = st->isolate;
+            v8::HandleScope hs(iso);
+            v8::Local<v8::Context> ctx = st->context.Get(iso);
+            v8::Local<v8::Promise::Resolver> res = st->resolver.Get(iso);
+            if (ctx.IsEmpty() || res.IsEmpty()) {
+              return;
+            }
+            v8::Context::Scope cs(ctx);
+            v8::MicrotasksScope microtasks(
+                ctx, v8::MicrotasksScope::kRunMicrotasks);
+            if (!ok) {
+              v8::Local<v8::String> msg =
+                  v8::String::NewFromUtf8(
+                      iso, error.empty() ? "Exposed call failed" : error.c_str())
+                      .ToLocalChecked();
+              std::ignore = res->Reject(ctx, v8::Exception::Error(msg));
+            } else {
+              v8::Local<v8::Value> parsed = v8::Undefined(iso);
+              if (!result_json.empty()) {
+                v8::Local<v8::String> js;
+                if (v8::String::NewFromUtf8(iso, result_json.data(),
+                                            v8::NewStringType::kNormal,
+                                            static_cast<int>(result_json.size()))
+                        .ToLocal(&js)) {
+                  std::ignore = v8::JSON::Parse(ctx, js).ToLocal(&parsed);
+                }
+              }
+              std::ignore = res->Resolve(ctx, parsed);
+            }
+          },
+          weak_factory_.GetWeakPtr(), std::move(state)));
+}
+
+void DubRenderFrameObserver::InstallExposedBindingsInCurrentContext() {
+  if (exposed_names_.empty() || !exposed_host_.is_bound()) {
+    return;
+  }
+  blink::WebLocalFrame* frame = render_frame()->GetWebFrame();
+  if (!frame) {
+    return;
+  }
+  v8::Isolate* isolate = frame->GetAgentGroupScheduler()->Isolate();
+  v8::HandleScope hs(isolate);
+  v8::Local<v8::Context> context = frame->MainWorldScriptContext();
+  if (context.IsEmpty()) {
+    return;
+  }
+  v8::Context::Scope cs(context);
+  v8::MicrotasksScope microtasks(
+      context, v8::MicrotasksScope::kDoNotRunMicrotasks);
+  v8::TryCatch tc(isolate);
+  v8::Local<v8::Object> global = context->Global();
+  for (const auto& name : exposed_names_) {
+    const uint64_t key =
+        RegisterExposedBinding({weak_factory_.GetWeakPtr(), name});
+    v8::Local<v8::Function> fn;
+    v8::Local<v8::String> prop_name;
+    if (v8::Function::New(
+            context, &OnExposedFunctionCalled,
+            v8::Number::New(isolate, static_cast<double>(key)))
+            .ToLocal(&fn) &&
+        v8::String::NewFromUtf8(isolate, name.data(),
+                                v8::NewStringType::kNormal,
+                                static_cast<int>(name.size()))
+            .ToLocal(&prop_name)) {
+      std::ignore = global->Set(context, prop_name, fn);
+    }
+  }
+}
+
+void DubRenderFrameObserver::RunInitScriptsForCurrentDocument() {
+  if (init_scripts_.empty()) {
+    return;
+  }
+  blink::WebLocalFrame* frame = render_frame()->GetWebFrame();
+  if (!frame) {
+    return;
+  }
+  const bool is_main = render_frame()->IsMainFrame();
+  const std::string doc_url =
+      frame->GetDocument().IsNull() ? "" : GURL(frame->GetDocument().Url()).spec();
+  v8::Isolate* isolate = frame->GetAgentGroupScheduler()->Isolate();
+  for (const auto& entry : init_scripts_) {
+    if (!entry) {
+      continue;
+    }
+    if (!entry->all_frames && !is_main) {
+      continue;
+    }
+    if (!entry->match.empty() && entry->match != "*" && !doc_url.empty() &&
+        !MatchesWildcard(doc_url, entry->match)) {
+      continue;
+    }
+    if (entry->isolated_world) {
+      frame->ExecuteScriptInIsolatedWorld(
+          kDubIsolatedWorldId,
+          blink::WebScriptSource(blink::WebString::FromUtf8(entry->source)),
+          blink::BackForwardCacheAware::kAllow);
+    } else {
+      v8::HandleScope hs(isolate);
+      v8::Local<v8::Context> ctx = frame->MainWorldScriptContext();
+      if (ctx.IsEmpty()) {
+        continue;
+      }
+      v8::Context::Scope cs(ctx);
+      v8::MicrotasksScope microtasks(
+          ctx, v8::MicrotasksScope::kDoNotRunMicrotasks);
+      v8::TryCatch tc(isolate);
+      v8::Local<v8::String> src;
+      v8::Local<v8::Script> script;
+      if (v8::String::NewFromUtf8(isolate, entry->source.data(),
+                                  v8::NewStringType::kNormal,
+                                  static_cast<int>(entry->source.size()))
+              .ToLocal(&src) &&
+          v8::Script::Compile(ctx, src).ToLocal(&script)) {
+        std::ignore = script->Run(ctx);
+      }
+    }
+  }
+}
+
+void DubRenderFrameObserver::SetInitScripts(
+    std::vector<dub::mojom::InitScriptEntryPtr> scripts) {
+  init_scripts_ = std::move(scripts);
+}
+
+void DubRenderFrameObserver::SetExposedFunctions(
+    const std::vector<std::string>& names,
+    mojo::PendingRemote<dub::mojom::DubExposedHost> host) {
+  exposed_names_ = names;
+  exposed_host_.reset();
+  if (host.is_valid()) {
+    exposed_host_.Bind(std::move(host));
+  }
+  InstallExposedBindingsInCurrentContext();
+}
+
 void DubRenderFrameObserver::Evaluate(const std::string& expression,
                                       EvaluateCallback callback) {
+  EvaluateEx(expression, /*isolated_world=*/false, std::move(callback));
+}
+
+void DubRenderFrameObserver::EvaluateEx(const std::string& expression,
+                                        bool isolated_world,
+                                        EvaluateExCallback callback) {
   blink::WebLocalFrame* frame = render_frame()->GetWebFrame();
   if (!frame) {
     auto res = dub::mojom::EvalResult::New();
@@ -238,12 +533,15 @@ void DubRenderFrameObserver::Evaluate(const std::string& expression,
 
   v8::Isolate* isolate = frame->GetAgentGroupScheduler()->Isolate();
   v8::HandleScope handle_scope(isolate);
-  v8::Local<v8::Context> context = frame->MainWorldScriptContext();
+  v8::Local<v8::Context> context =
+      GetContextForWorld(frame, isolate, isolated_world);
   if (context.IsEmpty()) {
     auto res = dub::mojom::EvalResult::New();
     res->ok = false;
     res->error_code = "NO_CONTEXT";
-    res->error_message = "Main world V8 context is unavailable";
+    res->error_message = isolated_world
+                             ? "Isolated world V8 context is unavailable"
+                             : "Main world V8 context is unavailable";
     std::move(callback).Run(std::move(res));
     return;
   }
@@ -410,8 +708,6 @@ void DubRenderFrameObserver::ExecutePageTool(
               return;
             }
             if (result->IsNull()) {
-              // Cross-document navigation: result will be fetched from the new
-              // Document via GetCrossDocumentScriptToolResult.
               std::move(done).Run(true, std::nullopt, true, "", "");
               return;
             }
@@ -419,7 +715,6 @@ void DubRenderFrameObserver::ExecutePageTool(
           },
           std::move(callback)));
   if (!started) {
-    // Callback already invoked or failed to start.
     return;
   }
 }
@@ -449,6 +744,8 @@ void DubRenderFrameObserver::ResolveTarget(const std::string& target,
 
   std::string quoted_target;
   base::JSONWriter::Write(base::Value(target), &quoted_target);
+  // Pierces open Shadow DOM recursively for both CSS selectors and text targets,
+  // and always returns a 2-tuple [element | null, metaJson].
   const std::string script_str =
       "(() => {"
       "  const q = " +
@@ -457,14 +754,38 @@ void DubRenderFrameObserver::ResolveTarget(const std::string& target,
       "  const isSel = " +
       std::string(is_selector ? "true" : "false") +
       ";"
+      "  const collectRoots = (root, out = []) => {"
+      "    if (!root) return out;"
+      "    out.push(root);"
+      "    const all = root.querySelectorAll ? root.querySelectorAll('*') : [];"
+      "    for (const node of all) {"
+      "      if (node.shadowRoot) collectRoots(node.shadowRoot, out);"
+      "    }"
+      "    return out;"
+      "  };"
+      "  const deepQuery = (sel) => {"
+      "    for (const root of collectRoots(document)) {"
+      "      const hit = root.querySelector(sel);"
+      "      if (hit) return hit;"
+      "    }"
+      "    return null;"
+      "  };"
+      "  const deepQueryAll = (sel) => {"
+      "    const res = [];"
+      "    for (const root of collectRoots(document)) {"
+      "      for (const hit of root.querySelectorAll(sel)) res.push(hit);"
+      "    }"
+      "    return res;"
+      "  };"
       "  let el = null;"
       "  if (isSel) {"
-      "    try { el = document.querySelector(q); } catch (e) { return "
-      "JSON.stringify({found:false,error:String(e)}); }"
+      "    try { el = deepQuery(q); } catch (e) {"
+      "      return [null, JSON.stringify({found:false,error:String(e)})];"
+      "    }"
       "  } else {"
       "    const needle = q.trim().toLowerCase();"
-      "    const candidates = Array.from(document.querySelectorAll("
-      "      'button,a,input,select,textarea,[role=button],[role=link],[tabindex]'));"
+      "    const candidates = deepQueryAll("
+      "      'button,a,input,select,textarea,[role=button],[role=link],[role=checkbox],[role=radio],[role=tab],[role=menuitem],[tabindex]');"
       "    const matchText = (node) => {"
       "      const parts = [node.innerText, node.textContent, node.value,"
       "        node.getAttribute && node.getAttribute('aria-label'),"
@@ -475,7 +796,7 @@ void DubRenderFrameObserver::ResolveTarget(const std::string& target,
       "    el = candidates.find(c => matchText(c).some(t => t === needle))"
       "      || candidates.find(c => matchText(c).some(t => t.includes(needle)));"
       "    if (!el) {"
-      "      try { el = document.querySelector(q); } catch (_) {}"
+      "      try { el = deepQuery(q); } catch (_) {}"
       "    }"
       "  }"
       "  if (!el) return [null, JSON.stringify({found:false,error:'Target not found: ' + q})];"
@@ -548,6 +869,262 @@ void DubRenderFrameObserver::ResolveTarget(const std::string& target,
     res->error = *err;
   }
   std::move(callback).Run(std::move(res));
+}
+
+void DubRenderFrameObserver::Snapshot(uint32_t max_nodes,
+                                      bool include_hidden,
+                                      SnapshotCallback callback) {
+  blink::WebLocalFrame* frame = render_frame()->GetWebFrame();
+  if (!frame) {
+    std::move(callback).Run(R"({"error":"Frame is unavailable","nodes":[]})");
+    return;
+  }
+  const uint32_t limit = std::clamp<uint32_t>(max_nodes == 0 ? 300 : max_nodes, 1, 2000);
+  const std::string script_str =
+      "(() => {"
+      "  const maxNodes = " +
+      std::to_string(limit) +
+      ";"
+      "  const includeHidden = " +
+      std::string(include_hidden ? "true" : "false") +
+      ";"
+      "  const interactiveSel = 'a[href],button,input,select,textarea,summary,details,h1,h2,h3,label,img[alt],[role],[tabindex],[contenteditable]';"
+      "  const els = [];"
+      "  const metas = [];"
+      "  const inferRole = (el) => {"
+      "    const r = el.getAttribute && el.getAttribute('role');"
+      "    if (r) return r;"
+      "    const tag = (el.tagName || '').toLowerCase();"
+      "    if (tag === 'a') return 'link';"
+      "    if (tag === 'button') return 'button';"
+      "    if (tag === 'select') return 'combobox';"
+      "    if (tag === 'textarea') return 'textbox';"
+      "    if (tag === 'img') return 'img';"
+      "    if (tag === 'h1' || tag === 'h2' || tag === 'h3') return 'heading';"
+      "    if (tag === 'input') {"
+      "      const t = (el.type || 'text').toLowerCase();"
+      "      if (t === 'checkbox') return 'checkbox';"
+      "      if (t === 'radio') return 'radio';"
+      "      if (t === 'submit' || t === 'button' || t === 'reset') return 'button';"
+      "      return 'textbox';"
+      "    }"
+      "    return tag;"
+      "  };"
+      "  const bestName = (el) => {"
+      "    const raw = (el.getAttribute && (el.getAttribute('aria-label') || el.getAttribute('alt') || el.getAttribute('title') || el.getAttribute('placeholder')))"
+      "      || el.innerText || el.textContent || el.value || '';"
+      "    return String(raw).replace(/\\s+/g, ' ').trim().slice(0, 160);"
+      "  };"
+      "  const bestSelector = (el) => {"
+      "    if (el.id) return '#' + CSS.escape(el.id);"
+      "    const name = el.getAttribute && el.getAttribute('name');"
+      "    const tag = (el.tagName || '').toLowerCase();"
+      "    if (name) return tag + '[name=\"' + name.replace(/\"/g, '\\\\\"') + '\"]';"
+      "    const testId = el.getAttribute && el.getAttribute('data-testid');"
+      "    if (testId) return '[data-testid=\"' + testId.replace(/\"/g, '\\\\\"') + '\"]';"
+      "    return tag;"
+      "  };"
+      "  const walk = (root, inShadow) => {"
+      "    if (!root || els.length >= maxNodes) return;"
+      "    const nodes = root.querySelectorAll ? root.querySelectorAll('*') : [];"
+      "    for (const el of nodes) {"
+      "      if (els.length >= maxNodes) break;"
+      "      if (el.matches && el.matches(interactiveSel)) {"
+      "        const r = el.getBoundingClientRect();"
+      "        const style = getComputedStyle(el);"
+      "        const visible = r.width > 0 && r.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';"
+      "        if (visible || includeHidden) {"
+      "          els.push(el);"
+      "          const meta = {"
+      "            role: inferRole(el),"
+      "            tag: (el.tagName || '').toLowerCase(),"
+      "            name: bestName(el),"
+      "            selector: bestSelector(el),"
+      "            visible,"
+      "            inShadow,"
+      "            focused: document.activeElement === el,"
+      "            disabled: Boolean(el.disabled || el.getAttribute('aria-disabled') === 'true'),"
+      "            rect: { x: Math.round(r.left), y: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) }"
+      "          };"
+      "          if ('value' in el && el.value !== undefined && el.type !== 'password') meta.value = String(el.value).slice(0, 200);"
+      "          if ('checked' in el && (el.type === 'checkbox' || el.type === 'radio')) meta.checked = Boolean(el.checked);"
+      "          if (el.tagName === 'A' && el.href) meta.href = el.href;"
+      "          if (el.tagName === 'INPUT' && el.type) meta.type = el.type;"
+      "          metas.push(meta);"
+      "        }"
+      "      }"
+      "      if (el.shadowRoot) walk(el.shadowRoot, true);"
+      "    }"
+      "  };"
+      "  walk(document, false);"
+      "  return [els, JSON.stringify({"
+      "    url: location.href,"
+      "    title: document.title,"
+      "    viewport: { width: window.innerWidth, height: window.innerHeight, scrollX: Math.round(window.scrollX), scrollY: Math.round(window.scrollY) },"
+      "    nodes: metas"
+      "  })];"
+      "})()";
+
+  v8::Isolate* isolate = frame->GetAgentGroupScheduler()->Isolate();
+  v8::HandleScope hs(isolate);
+  v8::Local<v8::Context> context = frame->MainWorldScriptContext();
+  if (context.IsEmpty()) {
+    std::move(callback).Run(R"({"error":"Main world V8 context is unavailable","nodes":[]})");
+    return;
+  }
+  v8::Context::Scope cs(context);
+  v8::MicrotasksScope microtasks(
+      context, v8::MicrotasksScope::kDoNotRunMicrotasks);
+  v8::TryCatch tc(isolate);
+  v8::Local<v8::String> src;
+  v8::Local<v8::Script> script;
+  v8::Local<v8::Value> value;
+  if (!v8::String::NewFromUtf8(isolate, script_str.data(),
+                               v8::NewStringType::kNormal,
+                               static_cast<int>(script_str.size()))
+           .ToLocal(&src) ||
+      !v8::Script::Compile(context, src).ToLocal(&script) ||
+      !script->Run(context).ToLocal(&value) || !value->IsArray()) {
+    std::move(callback).Run(R"({"error":"Snapshot evaluation failed","nodes":[]})");
+    return;
+  }
+
+  v8::Local<v8::Array> pair = value.As<v8::Array>();
+  v8::Local<v8::Value> els_val;
+  v8::Local<v8::Value> json_val;
+  if (!pair->Get(context, 0).ToLocal(&els_val) || !els_val->IsArray() ||
+      !pair->Get(context, 1).ToLocal(&json_val) || !json_val->IsString()) {
+    std::move(callback).Run(R"({"error":"Invalid snapshot payload","nodes":[]})");
+    return;
+  }
+  auto parsed = base::JSONReader::ReadDict(V8ToUtf8(isolate, json_val),
+                                           base::JSON_PARSE_RFC);
+  if (!parsed) {
+    std::move(callback).Run(R"({"error":"Malformed snapshot JSON","nodes":[]})");
+    return;
+  }
+  v8::Local<v8::Array> els_arr = els_val.As<v8::Array>();
+  if (base::ListValue* nodes = parsed->FindList("nodes")) {
+    const uint32_t count =
+        std::min<uint32_t>(els_arr->Length(), static_cast<uint32_t>(nodes->size()));
+    for (uint32_t i = 0; i < count; ++i) {
+      v8::Local<v8::Value> el_v;
+      if (els_arr->Get(context, i).ToLocal(&el_v) && el_v->IsObject()) {
+        blink::WebElement web_el = blink::WebElement::FromV8Value(isolate, el_v);
+        if (!web_el.IsNull()) {
+          if (base::DictValue* d = (*nodes)[i].GetIfDict()) {
+            d->Set("nodeId", web_el.GetDomNodeId());
+          }
+        }
+      }
+    }
+  }
+  std::string out_json;
+  base::JSONWriter::Write(*parsed, &out_json);
+  std::move(callback).Run(std::move(out_json));
+}
+
+void DubRenderFrameObserver::WaitFor(const std::string& selector,
+                                     const std::string& text,
+                                     const std::string& expression,
+                                     const std::string& state,
+                                     uint32_t timeout_ms,
+                                     WaitForCallback callback) {
+  std::string q_sel, q_text, q_expr, q_state;
+  base::JSONWriter::Write(base::Value(selector), &q_sel);
+  base::JSONWriter::Write(base::Value(text), &q_text);
+  base::JSONWriter::Write(base::Value(expression), &q_expr);
+  base::JSONWriter::Write(base::Value(state.empty() ? "visible" : state), &q_state);
+  const uint32_t bounded_timeout = std::clamp<uint32_t>(timeout_ms == 0 ? 10000 : timeout_ms, 50, 120000);
+
+  const std::string wait_js =
+      "new Promise((resolve) => {"
+      "  const sel = " + q_sel + ";"
+      "  const txt = " + q_text + ";"
+      "  const expr = " + q_expr + ";"
+      "  const state = " + q_state + ";"
+      "  const deadline = Date.now() + " + std::to_string(bounded_timeout) + ";"
+      "  const collectRoots = (root, out = []) => {"
+      "    if (!root) return out; out.push(root);"
+      "    for (const n of (root.querySelectorAll ? root.querySelectorAll('*') : [])) {"
+      "      if (n.shadowRoot) collectRoots(n.shadowRoot, out);"
+      "    } return out;"
+      "  };"
+      "  const findEl = () => {"
+      "    if (!sel) return null;"
+      "    for (const r of collectRoots(document)) {"
+      "      const hit = r.querySelector(sel); if (hit) return hit;"
+      "    } return null;"
+      "  };"
+      "  const check = () => {"
+      "    if (expr) {"
+      "      try { const v = (0, eval)(expr); if (v) return { matched: true, value: v }; } catch (_) {}"
+      "      return null;"
+      "    }"
+      "    if (txt) {"
+      "      const bodyText = (document.body && (document.body.innerText || document.body.textContent)) || '';"
+      "      const has = bodyText.includes(txt);"
+      "      if (state === 'hidden' || state === 'detached') return !has ? { matched: true, text: txt } : null;"
+      "      return has ? { matched: true, text: txt } : null;"
+      "    }"
+      "    if (sel) {"
+      "      const el = findEl();"
+      "      if (state === 'detached') return !el ? { matched: true, selector: sel } : null;"
+      "      if (!el) return state === 'hidden' ? { matched: true, selector: sel } : null;"
+      "      const r = el.getBoundingClientRect();"
+      "      const st = getComputedStyle(el);"
+      "      const vis = r.width > 0 && r.height > 0 && st.visibility !== 'hidden' && st.display !== 'none';"
+      "      if (state === 'attached') return { matched: true, selector: sel };"
+      "      if (state === 'hidden') return !vis ? { matched: true, selector: sel } : null;"
+      "      return vis ? { matched: true, selector: sel } : null;"
+      "    }"
+      "    return { matched: true };"
+      "  };"
+      "  const done = (ok, detail, error) => {"
+      "    clearInterval(iv); if (obs) obs.disconnect();"
+      "    resolve({ ok, detail: detail || {}, error: error || '' });"
+      "  };"
+      "  let obs = null;"
+      "  let iv = null;"
+      "  const immediate = check();"
+      "  if (immediate) return resolve({ ok: true, detail: immediate, error: '' });"
+      "  const step = () => {"
+      "    const hit = check();"
+      "    if (hit) return done(true, hit, '');"
+      "    if (Date.now() >= deadline) return done(false, {}, 'Timed out waiting for condition');"
+      "  };"
+      "  try {"
+      "    obs = new MutationObserver(step);"
+      "    if (document.documentElement) obs.observe(document.documentElement, { childList: true, subtree: true, attributes: true, characterData: true });"
+      "  } catch (_) {}"
+      "  iv = setInterval(step, 50);"
+      "})";
+
+  EvaluateEx(
+      wait_js, /*isolated_world=*/false,
+      base::BindOnce(
+          [](WaitForCallback done, dub::mojom::EvalResultPtr eval) {
+            if (!eval || !eval->ok) {
+              std::move(done).Run(
+                  false, "{}",
+                  eval ? eval->error_message : "Wait evaluation failed");
+              return;
+            }
+            auto parsed = base::JSONReader::ReadDict(eval->result_json,
+                                                     base::JSON_PARSE_RFC);
+            if (!parsed) {
+              std::move(done).Run(false, "{}", "Malformed wait result");
+              return;
+            }
+            const bool ok = parsed->FindBool("ok").value_or(false);
+            std::string detail_json = "{}";
+            if (const auto* d = parsed->FindDict("detail")) {
+              base::JSONWriter::Write(*d, &detail_json);
+            }
+            const auto* err = parsed->FindString("error");
+            std::move(done).Run(ok, detail_json, err ? *err : "");
+          },
+          std::move(callback)));
 }
 
 void DubRenderFrameObserver::ClockControl(const std::string& op,

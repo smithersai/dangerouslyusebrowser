@@ -3,10 +3,11 @@
 #define SERVICES_NETWORK_DUB_DUB_NETWORK_INTERCEPTOR_H_
 
 #include <cstdint>
-#include <string>
 #include <vector>
 
 #include "base/component_export.h"
+#include "base/functional/callback.h"
+#include "base/no_destructor.h"
 #include "mojo/public/cpp/bindings/pending_receiver.h"
 #include "mojo/public/cpp/bindings/pending_remote.h"
 #include "mojo/public/cpp/bindings/remote.h"
@@ -14,17 +15,18 @@
 #include "services/network/public/mojom/url_loader.mojom.h"
 
 namespace network {
-
 struct ResourceRequest;
+}
 
-namespace dub {
+namespace network::dub {
 
 class COMPONENT_EXPORT(NETWORK_SERVICE) DubNetworkInterceptor {
  public:
-  DubNetworkInterceptor();
-  DubNetworkInterceptor(const DubNetworkInterceptor&) = delete;
-  DubNetworkInterceptor& operator=(const DubNetworkInterceptor&) = delete;
-  ~DubNetworkInterceptor();
+  using ProceedCallback = base::OnceCallback<void(
+      mojo::PendingReceiver<mojom::URLLoader>,
+      uint32_t,
+      ResourceRequest,
+      mojo::PendingRemote<mojom::URLLoaderClient>)>;
 
   static DubNetworkInterceptor& GetInstance();
 
@@ -32,30 +34,40 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) DubNetworkInterceptor {
                  std::vector<mojom::DubNetworkRulePtr> rules,
                  mojo::PendingRemote<mojom::DubNetworkObserver> observer);
 
+  void SetConfig(bool capture_bodies, uint32_t max_capture_bytes);
+
   bool HasActiveRules() const;
   bool HasObserver() const;
-  uint64_t version() const { return version_; }
+  bool CaptureBodies() const { return capture_bodies_; }
+  uint32_t MaxCaptureBytes() const { return max_capture_bytes_; }
 
-  // Called from PrefetchMatchingURLLoaderFactory::CreateLoaderAndStart.
-  // Returns true if Dub completely handled the request (block or mock) and the
-  // caller should return immediately.
-  // Returns false if the request should continue to next_->CreateLoaderAndStart
-  // (potentially with `request` modified for redirect/cache-bypass and `client`
-  // wrapped for response body patching or logging).
+  void EmitEvent(mojom::DubNetworkLogEntryPtr entry);
+  void InvokeObserverCallback(
+      mojom::DubNetworkCallbackEventPtr event,
+      base::OnceCallback<void(mojom::DubNetworkCallbackDecisionPtr)> done);
+
+  // Intercepts an outgoing request inside the network service.
+  // Returns true if handled synchronously OR deferred asynchronously via
+  // `proceed` (caller must return immediately). Returns false if caller should
+  // continue immediately with the (possibly rewritten) request and client.
   bool Intercept(mojo::PendingReceiver<mojom::URLLoader>& loader,
                  uint32_t& options,
                  ResourceRequest& request,
-                 mojo::PendingRemote<mojom::URLLoaderClient>& client);
-
-  void EmitEvent(mojom::DubNetworkLogEntryPtr entry);
+                 mojo::PendingRemote<mojom::URLLoaderClient>& client,
+                 ProceedCallback proceed);
 
  private:
+  friend class base::NoDestructor<DubNetworkInterceptor>;
+  DubNetworkInterceptor();
+  ~DubNetworkInterceptor();
+
   uint64_t version_ = 0;
+  bool capture_bodies_ = false;
+  uint32_t max_capture_bytes_ = 262144;
   std::vector<mojom::DubNetworkRulePtr> rules_;
   mojo::Remote<mojom::DubNetworkObserver> observer_;
 };
 
-}  // namespace dub
-}  // namespace network
+}  // namespace network::dub
 
 #endif  // SERVICES_NETWORK_DUB_DUB_NETWORK_INTERCEPTOR_H_

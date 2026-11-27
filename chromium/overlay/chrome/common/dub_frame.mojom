@@ -40,9 +40,26 @@ struct ClockState {
   string error_message;
 };
 
+struct InitScriptEntry {
+  string id;
+  string match;
+  string source;
+  bool isolated_world;
+  bool all_frames;
+};
+
+interface DubExposedHost {
+  // Invokes a host-registered TypeScript/JS function from the renderer.
+  Call(string name, string args_json)
+      => (bool ok, string result_json, string error);
+};
+
 interface DubRenderFrame {
   // Promise-aware main-world JavaScript evaluation.
   Evaluate(string expression) => (EvalResult result);
+
+  // Promise-aware evaluation in either main world or Dub isolated world.
+  EvaluateEx(string expression, bool isolated_world) => (EvalResult result);
 
   // Returns live WebMCP tools registered on this frame's Document.
   ListPageTools() => (array<PageToolInfo> tools);
@@ -60,10 +77,30 @@ interface DubRenderFrame {
   // Cancels an in-flight WebMCP tool execution on this frame.
   CancelPageTool(mojo_base.mojom.UnguessableToken invocation_id);
 
-  // Resolves a CSS selector or visible label text to viewport DIP coordinates.
+  // Resolves a CSS selector or visible label text (piercing open Shadow DOM)
+  // to DOM nodeId + viewport DIP coordinates.
   ResolveTarget(string target, bool is_selector) => (TargetResolution result);
+
+  // Returns a structured accessibility/interactive DOM snapshot with real
+  // Blink DOMNodeIds across open Shadow DOM.
+  Snapshot(uint32 max_nodes, bool include_hidden) => (string snapshot_json);
 
   // Controls this frame's Page-scoped virtual clock (freeze/advance/step/resume).
   ClockControl(string op, int64 epoch_ms, int64 delta_ms, uint32 frames)
       => (ClockState state);
+
+  // Updates active init scripts (executed at DidClearWindowObject before page JS).
+  SetInitScripts(array<InitScriptEntry> scripts);
+
+  // Updates exposed host functions bound onto window[name] in this frame.
+  SetExposedFunctions(array<string> names,
+                      pending_remote<DubExposedHost>? host);
+
+  // Waits in-renderer for a selector, text, or expression to satisfy `state`.
+  WaitFor(string selector,
+          string text,
+          string expression,
+          string state,
+          uint32 timeout_ms)
+      => (bool ok, string detail_json, string error);
 };

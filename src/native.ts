@@ -8,7 +8,26 @@ const envelope = z.object({
   protocol: z.literal(1), id: z.string(), result: z.unknown().optional(),
   error: z.object({ code: z.string(), message: z.string() }).optional(),
 }).refine(v => Object.hasOwn(v, 'result') !== !!v.error, 'Expected exactly one of result or error');
-type Addon = { request(path: string, json: string, timeout: number): Promise<string> };
+
+export type NativeStreamMessage =
+  | { protocol: 1; type: 'event'; event: string; data: Record<string, unknown> }
+  | { protocol: 1; type: 'callback'; callbackId: string; kind: string; deadlineMs: number; data: Record<string, unknown> };
+
+export type NativeSubscription = {
+  streamId: string;
+  close: () => void;
+};
+
+type RawStream = { ack: string; close: () => void };
+type Addon = {
+  request(path: string, json: string, timeout: number): Promise<string>;
+  subscribe?: (
+    path: string,
+    json: string,
+    timeout: number,
+    callback: (kind: 'message' | 'close' | 'error', payload: string) => void
+  ) => Promise<RawStream>;
+};
 let addon: Addon | undefined;
 function binding(): Addon {
   if (addon) return addon;
@@ -47,5 +66,53 @@ export class NativeBridge {
     if (reply.id !== id) throw new DubError('PROTOCOL', 'Dub response ID did not match the request');
     if (reply.error) throw new DubError(reply.error.code, reply.error.message);
     return reply.result as T;
+  }
+  async subscribe(
+    handlers: {
+      events?: string[];
+      onMessage: (message: NativeStreamMessage) => void;
+      onClose?: (error?: string) => void;
+    }
+  ): Promise<NativeSubscription> {
+    const sub = binding().subscribe;
+    if (!sub) throw new DubError('UNSUPPORTED', 'Installed Dub native binding does not support event streams. Run npm run build:native.');
+    const id = randomUUID();
+    const raw = await sub(
+      this.socket,
+      JSON.stringify({
+        protocol: 1,
+        id,
+        method: 'events.subscribe',
+        params: handlers.events ? { events: handlers.events } : {},
+        timeoutMs: Math.min(this.timeoutMs, 10000),
+      }),
+      Math.min(this.timeoutMs, 10000),
+      (kind, payload) => {
+        if (kind === 'message') {
+          try {
+            const parsed = JSON.parse(payload) as NativeStreamMessage;
+            handlers.onMessage(parsed);
+          } catch {
+            // Ignore malformed stream frames rather than crashing the host.
+          }
+        } else {
+          handlers.onClose?.(kind === 'error' ? payload : undefined);
+        }
+      }
+    );
+    const ack = envelope.parse(JSON.parse(raw.ack));
+    if (ack.id !== id) {
+      raw.close();
+      throw new DubError('PROTOCOL', 'Dub subscribe ack ID did not match the request');
+    }
+    if (ack.error) {
+      raw.close();
+      throw new DubError(ack.error.code, ack.error.message);
+    }
+    const result = (ack.result ?? {}) as { streamId?: string };
+    return {
+      streamId: result.streamId ?? id,
+      close: () => raw.close(),
+    };
   }
 }

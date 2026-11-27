@@ -36,6 +36,7 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/dub/dub_build_info.h"
 #include "chrome/browser/dub/dub_dispatch.h"
+#include "chrome/browser/dub/dub_events.h"
 #include "chrome/browser/lifetime/application_lifetime_desktop.h"
 #include "chrome/browser/lifetime/browser_shutdown.h"
 #include "chrome/browser/lifetime/termination_notification.h"
@@ -240,6 +241,7 @@ class Server {
       entry->connection.reset();
     }
     weak_factory_.InvalidateWeakPtrs();
+    DubEventHub::GetInstance().Shutdown();
 
     closing_browsers_subscription_ = {};
     app_terminating_subscription_ = {};
@@ -298,6 +300,26 @@ class Server {
       WriteResponseAsync(std::move(connection), std::move(request_id),
                          Error("TIMEOUT", "Dub native request timed out"),
                          base::TimeTicks::Now() + base::Milliseconds(250));
+      return;
+    }
+
+    // Upgrade persistent event/callback stream subscriptions directly.
+    if (const std::string* method = request.FindString("method");
+        method && *method == "events.subscribe") {
+      std::set<std::string> filter;
+      if (const base::DictValue* params = request.FindDict("params")) {
+        if (const base::ListValue* evs = params->FindList("events")) {
+          for (const auto& item : *evs) {
+            if (item.is_string() && !item.GetString().empty()) {
+              filter.insert(item.GetString());
+            }
+          }
+        }
+      }
+      base::ScopedFD stream_fd = std::move(connection->fd);
+      connection.reset();
+      DubEventHub::GetInstance().AddSubscriber(
+          std::move(stream_fd), std::move(request_id), std::move(filter));
       return;
     }
 

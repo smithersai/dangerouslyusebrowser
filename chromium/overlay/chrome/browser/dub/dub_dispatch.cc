@@ -20,7 +20,9 @@
 #include "base/threading/thread_restrictions.h"
 #include "base/time/time.h"
 #include "base/unguessable_token.h"
+#include "chrome/browser/dub/dub_browser_state.h"
 #include "chrome/browser/dub/dub_build_info.h"
+#include "chrome/browser/dub/dub_dispatch_extra.h"
 #include "chrome/browser/dub/dub_network.h"
 #include "chrome/browser/dub/dub_upload.h"
 #include "chrome/browser/profiles/profile.h"
@@ -37,6 +39,7 @@
 #include "components/version_info/version_info.h"
 #include "components/viz/common/frame_sinks/copy_output_result.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/browsing_data_filter_builder.h"
 #include "content/public/browser/global_routing_id.h"
 #include "content/public/browser/navigation_controller.h"
 #include "content/public/browser/render_frame_host.h"
@@ -50,9 +53,12 @@
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 #include "ui/base/page_transition_types.h"
 #include "ui/base/window_open_disposition.h"
+#include "ui/gfx/codec/jpeg_codec.h"
 #include "ui/gfx/codec/png_codec.h"
 #include "ui/gfx/geometry/point.h"
+#include "ui/gfx/geometry/rect.h"
 #include "url/gurl.h"
+#include "url/origin.h"
 
 namespace dub {
 
@@ -88,25 +94,16 @@ bool MatchesSelectedProfile(BrowserWindowInterface* window,
   if (!window || !session.profile) {
     return false;
   }
-  return window->GetProfile() == session.profile.get();
-}
-
-BrowserWindowInterface* FindWindowForProfile(const SessionContext& session) {
-  BrowserWindowInterface* found = nullptr;
-  auto* windows = GlobalBrowserCollection::GetInstance();
-  if (!windows) {
-    return nullptr;
+  Profile* wp = window->GetProfile();
+  if (wp == session.profile.get()) {
+    return true;
   }
-  windows->ForEach(
-      [&](BrowserWindowInterface* window) {
-        if (MatchesSelectedProfile(window, session)) {
-          found = window;
-          return false;
-        }
-        return true;
-      },
-      BrowserCollection::Order::kActivation);
-  return found;
+  if (auto* otr = session.profile->GetPrimaryOTRProfile(
+          /*create_if_needed=*/false);
+      otr && wp == otr) {
+    return true;
+  }
+  return false;
 }
 
 Tab FindTab(const SessionContext& session, int id) {
@@ -136,23 +133,35 @@ Tab FindTab(const SessionContext& session, int id) {
 }
 
 base::DictValue Describe(const Tab& tab) {
+  DubTabObserver::EnsureForWebContents(tab.contents);
   auto* model = tab.window->GetTabStripModel();
   return base::DictValue()
       .Set("id", TabId(tab.contents))
       .Set("url", tab.contents->GetVisibleURL().spec())
       .Set("title", base::UTF16ToUTF8(tab.contents->GetTitle()))
       .Set("active", model && model->active_index() == tab.index)
-      .Set("loading", tab.contents->IsLoading());
+      .Set("loading", tab.contents->IsLoading())
+      .Set("ephemeral", tab.window->GetProfile() &&
+                            tab.window->GetProfile()->IsOffTheRecord());
 }
 
 base::ListValue SupportedMethods() {
   base::ListValue methods;
   for (const char* method :
        {"browser.info", "tabs.list", "tabs.open", "tabs.close",
-        "tabs.activate", "tabs.navigate", "page.evaluate", "page.screenshot",
-        "tools.list", "tools.call", "profile.info", "profile.clear",
-        "net.set", "net.list", "net.remove", "net.log",
-        "clock.freeze", "clock.advance", "clock.step", "clock.resume"}) {
+        "tabs.activate", "tabs.navigate", "tabs.back", "tabs.forward",
+        "tabs.reload", "frames.list", "page.evaluate", "page.screenshot",
+        "page.snapshot", "page.console", "page.wait", "page.viewport",
+        "page.emulate", "tools.list", "tools.call", "profile.info",
+        "profile.clear", "net.set", "net.list", "net.remove", "net.log",
+        "net.config", "net.inspect", "net.remove_by_plugin", "clock.freeze",
+        "clock.advance", "clock.step", "clock.resume", "clipboard.read",
+        "clipboard.write", "dialog.policy", "dialog.list", "dialog.respond",
+        "downloads.list", "downloads.config", "downloads.wait",
+        "cookies.list", "cookies.set", "cookies.delete", "storage.export",
+        "storage.import", "scripts.add", "scripts.remove", "scripts.list",
+        "scripts.expose", "scripts.unexpose", "scripts.remove_by_plugin",
+        "events.subscribe", "callback.respond", "callbacks.list"}) {
     methods.Append(method);
   }
   return methods;
@@ -162,8 +171,8 @@ base::ListValue SupportedActorTools() {
   base::ListValue tools;
   for (const char* tool :
        {"actor.click", "actor.type", "actor.scroll", "actor.select",
-        "actor.drag", "actor.navigate", "actor.switch_tab",
-        "actor.upload_file"}) {
+        "actor.drag", "actor.hover", "actor.key", "actor.navigate",
+        "actor.switch_tab", "actor.upload_file"}) {
     tools.Append(tool);
   }
   return tools;
@@ -426,7 +435,13 @@ void HandleToolsList(const Tab& tab, Reply reply) {
       R"({"type":"object","required":["value"],"properties":{"value":{"type":"string"},"x":{"type":"integer"},"y":{"type":"integer"},"nodeId":{"type":"integer"},"selector":{"type":"string"},"target":{"type":"string"}}})"));
   collector->tools.Append(MakeActorToolDescriptor(
       "actor.drag", "Drag from one coordinate to another",
-      R"({"type":"object","required":["x","y","toX","toY"],"properties":{"x":{"type":"integer"},"y":{"type":"integer"},"toX":{"type":"integer"},"toY":{"type":"integer"}}})"));
+      R"({"type":"object","required":["x","y","toX","toY"],"properties":{"x":{"type":"integer"},"y":{"type":"integer"},"toX":{"type":"integer"},"toY":{"type":"integer"},"frameId":{"type":"string"}}})"));
+  collector->tools.Append(MakeActorToolDescriptor(
+      "actor.hover", "Hover over a target element or viewport coordinate",
+      R"({"type":"object","properties":{"x":{"type":"integer"},"y":{"type":"integer"},"nodeId":{"type":"integer"},"selector":{"type":"string"},"target":{"type":"string"},"frameId":{"type":"string"}}})"));
+  collector->tools.Append(MakeActorToolDescriptor(
+      "actor.key", "Send a native keyboard key or chord (Escape, Tab, Enter, Backspace, arrows, letters with ctrl/shift/alt/meta)",
+      R"({"type":"object","required":["key"],"properties":{"key":{"type":"string"},"ctrl":{"type":"boolean"},"shift":{"type":"boolean"},"alt":{"type":"boolean"},"meta":{"type":"boolean"},"frameId":{"type":"string"}}})"));
   collector->tools.Append(MakeActorToolDescriptor(
       "actor.navigate", "Navigate the tab to a URL",
       R"({"type":"object","required":["url"],"properties":{"url":{"type":"string"}}})"));
@@ -757,11 +772,27 @@ void InvokeTool(const SessionContext& session,
     return;
   }
 
-  auto* rfh = tab.contents->GetPrimaryMainFrame();
+  const std::string requested_frame =
+      input.FindString("frameId") ? *input.FindString("frameId") : "";
+  auto* rfh = ResolveFrameInTab(tab.contents, requested_frame);
   if (!rfh || !rfh->IsRenderFrameLive()) {
-    std::move(reply).Run(Error("FRAME_GONE", "Target main frame is not live"));
+    std::move(reply).Run(Error("FRAME_GONE", "Target frame is not live"));
     return;
   }
+
+  if (name == "actor.key") {
+    std::string err;
+    if (!DispatchNativeKey(rfh, input, &err)) {
+      std::move(reply).Run(Error("INVALID_PARAMS", err));
+      return;
+    }
+    base::DictValue val;
+    val.Set("code", 0);
+    val.Set("message", "Key dispatched");
+    std::move(reply).Run(Result(base::Value(std::move(val))));
+    return;
+  }
+
   const content::GlobalRenderFrameHostId frame_id = rfh->GetGlobalId();
   const actor::TaskId task_id(session.next_task_id.Run());
 
@@ -890,20 +921,29 @@ void InvokeTool(const SessionContext& session,
         actor::mojom::DragAndReleaseAction::New(
             actor::mojom::ToolTarget::NewCoordinateDip(
                 gfx::Point(*to_x, *to_y))));
+  } else if (name == "actor.hover") {
+    action = actor::mojom::ToolAction::NewMouseMove(
+        actor::mojom::MouseMoveAction::New());
   } else {
     std::move(reply).Run(
         Error("UNKNOWN_TOOL", "Unknown native tool: " + name));
     return;
   }
 
-  // For actor.scroll without an explicit target, default to viewport center.
+  // For actor.scroll without an explicit target, default to actual viewport center.
   if (name == "actor.scroll" && !input.FindInt("nodeId") &&
       !input.FindInt("x") && !input.FindString("selector") &&
       !input.FindString("target")) {
+    gfx::Point center(200, 200);
+    if (auto* view = tab.contents->GetRenderWidgetHostView()) {
+      gfx::Size sz = view->GetVisibleViewportSize();
+      if (sz.width() > 0 && sz.height() > 0) {
+        center = gfx::Point(sz.width() / 2, sz.height() / 2);
+      }
+    }
     auto invocation = actor::mojom::ToolInvocation::New();
     invocation->task_id = task_id;
-    invocation->target =
-        actor::mojom::ToolTarget::NewCoordinateDip(gfx::Point(200, 200));
+    invocation->target = actor::mojom::ToolTarget::NewCoordinateDip(center);
     invocation->action = std::move(action);
     DispatchActorInvocation(frame_id, std::move(invocation),
                             /*clear_upload_after=*/false, std::move(reply),
@@ -969,6 +1009,10 @@ void Dispatch(const SessionContext& session,
   if (!session.profile) {
     std::move(reply).Run(
         Error("PROFILE_GONE", "Selected Dub profile is no longer available"));
+    return;
+  }
+
+  if (DispatchExtendedGlobal(session, method, params, reply)) {
     return;
   }
 
@@ -1064,8 +1108,21 @@ void Dispatch(const SessionContext& session,
       }
     }
     auto* partition = session.profile->GetDefaultStoragePartition();
+    std::unique_ptr<content::BrowsingDataFilterBuilder> filter_builder;
+    if (const std::string* origin_str = params.FindString("origin");
+        origin_str && !origin_str->empty()) {
+      GURL origin_url(*origin_str);
+      if (!origin_url.is_valid()) {
+        std::move(reply).Run(
+            Error("INVALID_PARAMS", "Invalid origin URL: " + *origin_str));
+        return;
+      }
+      filter_builder = content::BrowsingDataFilterBuilder::Create(
+          content::BrowsingDataFilterBuilder::Mode::kDelete);
+      filter_builder->AddOrigin(url::Origin::Create(origin_url));
+    }
     partition->ClearData(
-        mask, /*filter_builder=*/nullptr,
+        mask, filter_builder.get(),
         content::StoragePartition::StorageKeyPolicyMatcherFunction(),
         network::mojom::CookieDeletionFilter::New(),
         /*perform_storage_cleanup=*/true, base::Time(), base::Time::Max(),
@@ -1113,7 +1170,25 @@ void Dispatch(const SessionContext& session,
       return;
     }
     const GURL url(*url_str);
-    BrowserWindowInterface* window = FindWindowForProfile(session);
+    const bool ephemeral = params.FindBool("ephemeral").value_or(false);
+    const std::string wait_until =
+        params.FindString("waitUntil") ? *params.FindString("waitUntil") : "none";
+    Profile* target_profile =
+        ephemeral ? session.profile->GetPrimaryOTRProfile(/*create_if_needed=*/true)
+                  : session.profile.get();
+
+    BrowserWindowInterface* window = nullptr;
+    if (auto* windows = GlobalBrowserCollection::GetInstance()) {
+      windows->ForEach(
+          [&](BrowserWindowInterface* w) {
+            if (w && w->GetProfile() == target_profile) {
+              window = w;
+              return false;
+            }
+            return true;
+          },
+          BrowserCollection::Order::kActivation);
+    }
     content::WebContents* created = nullptr;
     if (window) {
       NavigateParams nav_params(window, url, ui::PAGE_TRANSITION_TYPED);
@@ -1121,12 +1196,21 @@ void Dispatch(const SessionContext& session,
       Navigate(&nav_params);
       created = nav_params.navigated_or_inserted_contents;
     } else {
-      NavigateParams nav_params(session.profile.get(), url,
-                                ui::PAGE_TRANSITION_TYPED);
+      NavigateParams nav_params(target_profile, url, ui::PAGE_TRANSITION_TYPED);
       nav_params.disposition = WindowOpenDisposition::NEW_WINDOW;
       Navigate(&nav_params);
       created = nav_params.navigated_or_inserted_contents;
-      window = FindWindowForProfile(session);
+      if (auto* windows = GlobalBrowserCollection::GetInstance()) {
+        windows->ForEach(
+            [&](BrowserWindowInterface* w) {
+              if (w && w->GetProfile() == target_profile) {
+                window = w;
+                return false;
+              }
+              return true;
+            },
+            BrowserCollection::Order::kActivation);
+      }
     }
     if (!created || !window || !window->GetTabStripModel()) {
       std::move(reply).Run(
@@ -1138,6 +1222,24 @@ void Dispatch(const SessionContext& session,
     if (index == TabStripModel::kNoTab) {
       std::move(reply).Run(
           Error("OPEN_FAILED", "Opened tab is not attached to tab strip"));
+      return;
+    }
+    DubTabObserver* obs = DubTabObserver::EnsureForWebContents(created);
+    if (wait_until != "none" && !wait_until.empty() && url.spec() != "about:blank") {
+      base::WeakPtr<content::WebContents> wc = created->GetWeakPtr();
+      obs->AddNavigationWaiter(
+          wait_until,
+          base::BindOnce(
+              [](base::WeakPtr<content::WebContents> weak_wc,
+                 BrowserWindowInterface* win, int idx, Reply done) {
+                if (!weak_wc) {
+                  std::move(done).Run(Error("TAB_GONE", "Tab closed while loading"));
+                  return;
+                }
+                std::move(done).Run(
+                    Result(base::Value(Describe({win, weak_wc.get(), idx}))));
+              },
+              wc, window, index, std::move(reply)));
       return;
     }
     std::move(reply).Run(
@@ -1153,7 +1255,7 @@ void Dispatch(const SessionContext& session,
       method == "page.screenshot" || method == "tools.list" ||
       method == "tools.call" || method == "clock.freeze" ||
       method == "clock.advance" || method == "clock.step" ||
-      method == "clock.resume";
+      method == "clock.resume" || IsExtendedTabMethod(method);
   if (!is_tab_method) {
     std::move(reply).Run(
         Error("METHOD_NOT_FOUND", "Native method is not implemented: " + method));
@@ -1212,27 +1314,57 @@ void Dispatch(const SessionContext& session,
     return;
   }
 
+  if (DispatchExtendedTab(session, method, params, tab.window, tab.contents,
+                          tab.index, reply)) {
+    return;
+  }
+
   if (method == "tabs.navigate") {
     const std::string& url = *params.FindString("url");
+    const std::string wait_until =
+        params.FindString("waitUntil") ? *params.FindString("waitUntil") : "none";
+    DubTabObserver* obs = DubTabObserver::EnsureForWebContents(tab.contents);
     tab.contents->GetController().LoadURL(
         GURL(url), content::Referrer(), ui::PAGE_TRANSITION_TYPED,
         std::string());
+    if (wait_until != "none" && !wait_until.empty()) {
+      base::WeakPtr<content::WebContents> wc = tab.contents->GetWeakPtr();
+      obs->AddNavigationWaiter(
+          wait_until,
+          base::BindOnce(
+              [](base::WeakPtr<content::WebContents> weak_wc,
+                 BrowserWindowInterface* win, int idx, Reply done) {
+                if (!weak_wc) {
+                  std::move(done).Run(Error("TAB_GONE", "Tab closed while loading"));
+                  return;
+                }
+                std::move(done).Run(
+                    Result(base::Value(Describe({win, weak_wc.get(), idx}))));
+              },
+              wc, tab.window, tab.index, std::move(reply)));
+      return;
+    }
     std::move(reply).Run(Result(base::Value(Describe(tab))));
     return;
   }
 
   if (method == "page.evaluate") {
-    auto* rfh = tab.contents->GetPrimaryMainFrame();
+    const std::string frame_id =
+        params.FindString("frameId") ? *params.FindString("frameId") : "";
+    const std::string world =
+        params.FindString("world") ? *params.FindString("world") : "main";
+    const bool isolated_world = (world == "isolated");
+    auto* rfh = ResolveFrameInTab(tab.contents, frame_id);
     if (!rfh || !rfh->IsRenderFrameLive()) {
-      std::move(reply).Run(Error("FRAME_GONE", "Main frame is not live"));
+      std::move(reply).Run(Error("FRAME_GONE", "Target frame is not live"));
       return;
     }
     auto remote =
         std::make_unique<mojo::AssociatedRemote<dub::mojom::DubRenderFrame>>();
     rfh->GetRemoteAssociatedInterfaces()->GetInterface(remote.get());
     auto* dub_frame = remote->get();
-    dub_frame->Evaluate(
-        *params.FindString("expression"),
+    dub_frame->EvaluateEx(
+        *params.FindString("expression"), isolated_world,
         mojo::WrapCallbackWithDefaultInvokeIfNotRun(
             base::BindOnce(
                 [](std::unique_ptr<
@@ -1271,30 +1403,51 @@ void Dispatch(const SessionContext& session,
       std::move(reply).Run(Error("NO_SURFACE", "Tab has no render surface"));
       return;
     }
+    gfx::Rect src_rect;
+    if (const base::DictValue* clip = params.FindDict("clip")) {
+      int cx = clip->FindInt("x").value_or(0);
+      int cy = clip->FindInt("y").value_or(0);
+      int cw = clip->FindInt("width").value_or(0);
+      int ch = clip->FindInt("height").value_or(0);
+      if (cw > 0 && ch > 0) {
+        src_rect = gfx::Rect(cx, cy, cw, ch);
+      }
+    }
+    const std::string format =
+        params.FindString("format") ? *params.FindString("format") : "png";
+    const int quality =
+        std::clamp(params.FindInt("quality").value_or(85), 1, 100);
     view->CopyFromSurface(
-        gfx::Rect(), gfx::Size(), base::Seconds(10),
+        src_rect, gfx::Size(), base::Seconds(10),
         base::BindOnce(
-            [](Reply done, const content::CopyFromSurfaceResult& copy) {
+            [](Reply done, std::string fmt, int qual,
+               const content::CopyFromSurfaceResult& copy) {
               if (!copy.has_value()) {
                 std::move(done).Run(
                     Error("CAPTURE_FAILED", "Could not copy the tab surface"));
                 return;
               }
-              auto png =
-                  gfx::PNGCodec::EncodeBGRASkBitmap(copy->bitmap, false);
-              if (!png) {
+              std::optional<std::vector<uint8_t>> encoded;
+              std::string mime = "image/png";
+              if (fmt == "jpeg" || fmt == "jpg") {
+                encoded = gfx::JPEGCodec::Encode(copy->bitmap, qual);
+                mime = "image/jpeg";
+              } else {
+                encoded = gfx::PNGCodec::EncodeBGRASkBitmap(copy->bitmap, false);
+              }
+              if (!encoded) {
                 std::move(done).Run(
-                    Error("CAPTURE_FAILED", "PNG encoding failed"));
+                    Error("CAPTURE_FAILED", "Image encoding failed"));
                 return;
               }
               base::DictValue val;
-              val.Set("mimeType", "image/png");
+              val.Set("mimeType", mime);
               val.Set("width", copy->bitmap.width());
               val.Set("height", copy->bitmap.height());
-              val.Set("data", base::Base64Encode(*png));
+              val.Set("data", base::Base64Encode(*encoded));
               std::move(done).Run(Result(base::Value(std::move(val))));
             },
-            std::move(reply)));
+            std::move(reply), format, quality));
     return;
   }
 
@@ -1359,33 +1512,100 @@ void Dispatch(const SessionContext& session,
       return;
     }
 
-    // Mirror clock control to any out-of-process subframes (OOPIFs) in this tab.
+    // Mirror clock control to any out-of-process subframes (OOPIFs) in this tab
+    // and await all OOPIFs + main frame before returning.
     content::RenderProcessHost* main_process = main_rfh->GetProcess();
     std::set<content::RenderProcessHost*> notified_processes{main_process};
+    std::vector<content::GlobalRenderFrameHostId> oopif_frames;
     tab.contents->ForEachRenderFrameHost(
         [&](content::RenderFrameHost* rfh) {
           if (!rfh || !rfh->IsRenderFrameLive() || rfh == main_rfh) {
             return;
           }
           if (notified_processes.insert(rfh->GetProcess()).second) {
-            auto sub_remote = std::make_unique<
-                mojo::AssociatedRemote<dub::mojom::DubRenderFrame>>();
-            rfh->GetRemoteAssociatedInterfaces()->GetInterface(sub_remote.get());
-            auto* sub_ptr = sub_remote->get();
-            sub_ptr->ClockControl(
-                op, epoch_ms, delta_ms, frames,
-                base::BindOnce(
-                    [](std::unique_ptr<
-                           mojo::AssociatedRemote<dub::mojom::DubRenderFrame>>,
-                       dub::mojom::ClockStatePtr) {},
-                    std::move(sub_remote)));
+            oopif_frames.push_back(rfh->GetGlobalId());
           }
         });
 
-    const content::GlobalRenderFrameHostId main_fid = main_rfh->GetGlobalId();
-    const bool wait_visual_commit =
+    struct ClockJoin {
+      dub::mojom::ClockStatePtr main_state;
+      content::GlobalRenderFrameHostId main_fid;
+      bool wait_visual_commit = false;
+      Reply reply;
+    };
+    auto join = std::make_shared<ClockJoin>();
+    join->main_fid = main_rfh->GetGlobalId();
+    join->wait_visual_commit =
         (op == "step" || op == "advance") &&
         tab.contents->GetVisibility() == content::Visibility::VISIBLE;
+    join->reply = std::move(reply);
+
+    auto barrier = base::BarrierClosure(
+        1 + oopif_frames.size(),
+        base::BindOnce(
+            [](std::shared_ptr<ClockJoin> j) {
+              dub::mojom::ClockStatePtr state = std::move(j->main_state);
+              if (!state) {
+                std::move(j->reply).Run(Error(
+                    "FRAME_GONE", "Renderer closed during clock control"));
+                return;
+              }
+              if (!state->ok) {
+                std::move(j->reply).Run(Error(
+                    state->error_code.empty() ? "CLOCK_FAILED"
+                                              : state->error_code,
+                    state->error_message));
+                return;
+              }
+              base::DictValue res;
+              res.Set("frozen", state->frozen);
+              res.Set("epochMs", static_cast<double>(state->epoch_ms));
+              res.Set("performanceNowMs", state->performance_now_ms);
+              res.Set("timersFired", static_cast<int>(state->timers_fired));
+              res.Set("timersCapped", state->timers_capped);
+              res.Set("framesStepped", static_cast<int>(state->frames_stepped));
+
+              if (j->wait_visual_commit) {
+                if (auto* rfh = content::RenderFrameHost::FromID(j->main_fid);
+                    rfh && rfh->IsRenderFrameLive()) {
+                  rfh->InsertVisualStateCallback(base::BindOnce(
+                      [](Reply r, base::DictValue payload, bool committed) {
+                        payload.Set("committed", committed);
+                        std::move(r).Run(
+                            Result(base::Value(std::move(payload))));
+                      },
+                      std::move(j->reply), std::move(res)));
+                  return;
+                }
+              }
+              res.Set("committed", true);
+              std::move(j->reply).Run(Result(base::Value(std::move(res))));
+            },
+            join));
+
+    for (const auto& sub_fid : oopif_frames) {
+      auto* rfh = content::RenderFrameHost::FromID(sub_fid);
+      if (!rfh || !rfh->IsRenderFrameLive()) {
+        barrier.Run();
+        continue;
+      }
+      auto sub_remote = std::make_unique<
+          mojo::AssociatedRemote<dub::mojom::DubRenderFrame>>();
+      rfh->GetRemoteAssociatedInterfaces()->GetInterface(sub_remote.get());
+      auto* sub_ptr = sub_remote->get();
+      sub_ptr->ClockControl(
+          op, epoch_ms, delta_ms, frames,
+          mojo::WrapCallbackWithDefaultInvokeIfNotRun(
+              base::BindOnce(
+                  [](std::unique_ptr<
+                         mojo::AssociatedRemote<dub::mojom::DubRenderFrame>>,
+                     base::RepeatingClosure done, dub::mojom::ClockStatePtr) {
+                    done.Run();
+                  },
+                  std::move(sub_remote), barrier),
+              dub::mojom::ClockStatePtr()));
+    }
+
     auto remote =
         std::make_unique<mojo::AssociatedRemote<dub::mojom::DubRenderFrame>>();
     main_rfh->GetRemoteAssociatedInterfaces()->GetInterface(remote.get());
@@ -1397,49 +1617,12 @@ void Dispatch(const SessionContext& session,
                 [](std::unique_ptr<
                        mojo::AssociatedRemote<dub::mojom::DubRenderFrame>>
                        keep_alive,
-                   content::GlobalRenderFrameHostId fid,
-                   bool wait_commit,
-                   Reply done,
+                   std::shared_ptr<ClockJoin> j, base::RepeatingClosure done,
                    dub::mojom::ClockStatePtr state) {
-                  if (!state) {
-                    std::move(done).Run(Error(
-                        "FRAME_GONE", "Renderer closed during clock control"));
-                    return;
-                  }
-                  if (!state->ok) {
-                    std::move(done).Run(Error(
-                        state->error_code.empty() ? "CLOCK_FAILED"
-                                                  : state->error_code,
-                        state->error_message));
-                    return;
-                  }
-                  base::DictValue res;
-                  res.Set("frozen", state->frozen);
-                  res.Set("epochMs", static_cast<double>(state->epoch_ms));
-                  res.Set("performanceNowMs", state->performance_now_ms);
-                  res.Set("timersFired", static_cast<int>(state->timers_fired));
-                  res.Set("timersCapped", state->timers_capped);
-                  res.Set("framesStepped",
-                          static_cast<int>(state->frames_stepped));
-
-                  if (wait_commit) {
-                    if (auto* rfh = content::RenderFrameHost::FromID(fid);
-                        rfh && rfh->IsRenderFrameLive()) {
-                      rfh->InsertVisualStateCallback(base::BindOnce(
-                          [](Reply r, base::DictValue payload, bool committed) {
-                            payload.Set("committed", committed);
-                            std::move(r).Run(
-                                Result(base::Value(std::move(payload))));
-                          },
-                          std::move(done), std::move(res)));
-                      return;
-                    }
-                  }
-                  res.Set("committed", true);
-                  std::move(done).Run(Result(base::Value(std::move(res))));
+                  j->main_state = std::move(state);
+                  done.Run();
                 },
-                std::move(remote), main_fid, wait_visual_commit,
-                std::move(reply)),
+                std::move(remote), join, barrier),
             dub::mojom::ClockStatePtr()));
     return;
   }

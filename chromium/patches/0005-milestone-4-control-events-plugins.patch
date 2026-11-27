@@ -1,0 +1,215 @@
+diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
+index 1111111111111..2222222222222 100644
+--- a/chrome/browser/BUILD.gn
++++ b/chrome/browser/BUILD.gn
+@@ -2021,9 +2021,15 @@ source_set("core") {
+ 
+   if (is_linux || is_mac) {
+     sources += [
++      "dub/dub_browser_state.cc",
++      "dub/dub_browser_state.h",
+       "dub/dub_build_info.h",
+       "dub/dub_dispatch.cc",
+       "dub/dub_dispatch.h",
++      "dub/dub_dispatch_extra.cc",
++      "dub/dub_dispatch_extra.h",
++      "dub/dub_events.cc",
++      "dub/dub_events.h",
+       "dub/dub_network.cc",
+       "dub/dub_network.h",
+       "dub/dub_server.cc",
+@@ -2035,9 +2041,11 @@ source_set("core") {
+       "//chrome/browser/profiles/keep_alive",
+       "//chrome/common:mojo_bindings",
+       "//components/tabs:public",
++      "//components/input",
+       "//components/version_info",
+       "//chrome/browser/lifetime:termination_notification",
+       "//components/web_cache/browser",
++      "//ui/base/clipboard",
+       "//ui/gfx/codec",
+     ]
+   }
+diff --git a/chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.cc b/chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.cc
+index 1111111111111..2222222222222 100644
+--- a/chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.cc
++++ b/chrome/browser/ui/browser_web_contents_delegate/browser_web_contents_delegate.cc
+@@ -1111,9 +1111,21 @@ BrowserWebContentsDelegate::GetTabModalDialogManagerDelegate(
+   }
+ }
+ 
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC)
++namespace dub {
++content::JavaScriptDialogManager* GetDialogManagerIfEnabled(
++    content::WebContents* contents);
++}  // namespace dub
++#endif
++
+ content::JavaScriptDialogManager*
+ BrowserWebContentsDelegate::GetJavaScriptDialogManager(
+     content::WebContents* source) {
++#if BUILDFLAG(IS_LINUX) || BUILDFLAG(IS_MAC)
++  if (auto* dub_mgr = dub::GetDialogManagerIfEnabled(source)) {
++    return dub_mgr;
++  }
++#endif
+   return javascript_dialogs::TabModalDialogManager::FromWebContents(source);
+ }
+ 
+diff --git a/services/network/network_service.cc b/services/network/network_service.cc
+index 1111111111111..2222222222222 100644
+--- a/services/network/network_service.cc
++++ b/services/network/network_service.cc
+@@ -1282,6 +1282,12 @@ void NetworkService::SetDubNetworkPolicy(
+       version, std::move(rules), std::move(observer));
+ }
+ 
++void NetworkService::SetDubNetworkConfig(bool capture_bodies,
++                                         uint32_t max_capture_bytes) {
++  network::dub::DubNetworkInterceptor::GetInstance().SetConfig(
++      capture_bodies, max_capture_bytes);
++}
++
+ mojom::URLLoaderNetworkServiceObserver*
+ NetworkService::GetDefaultURLLoaderNetworkServiceObserver() {
+   if (default_url_loader_network_service_observer_) {
+diff --git a/services/network/network_service.h b/services/network/network_service.h
+index 1111111111111..2222222222222 100644
+--- a/services/network/network_service.h
++++ b/services/network/network_service.h
+@@ -178,6 +178,8 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkService
+       uint64_t version,
+       std::vector<mojom::DubNetworkRulePtr> rules,
+       mojo::PendingRemote<mojom::DubNetworkObserver> observer) override;
++  void SetDubNetworkConfig(bool capture_bodies,
++                           uint32_t max_capture_bytes) override;
+   void ConfigureStubHostResolver(
+       net::InsecureDnsMode insecure_dns_mode,
+       bool happy_eyeballs_v3_enabled,
+diff --git a/services/network/prefetch_matching_url_loader_factory.cc b/services/network/prefetch_matching_url_loader_factory.cc
+index 1111111111111..2222222222222 100644
+--- a/services/network/prefetch_matching_url_loader_factory.cc
++++ b/services/network/prefetch_matching_url_loader_factory.cc
+@@ -100,8 +100,24 @@ void PrefetchMatchingURLLoaderFactory::CreateLoaderAndStart(
+     mojo::PendingRemote<mojom::URLLoaderClient> client,
+     const net::MutableNetworkTrafficAnnotationTag& traffic_annotation) {
+   LogCreateLoaderAndStartQueueTimeHistogram(request.is_outermost_main_frame);
++  auto proceed = base::BindOnce(
++      [](base::WeakPtr<PrefetchMatchingURLLoaderFactory> self,
++         int32_t req_id,
++         net::MutableNetworkTrafficAnnotationTag annotation,
++         mojo::PendingReceiver<mojom::URLLoader> ldr,
++         uint32_t opts,
++         ResourceRequest req,
++         mojo::PendingRemote<mojom::URLLoaderClient> cli) {
++        if (!self) {
++          return;
++        }
++        self->next_->CreateLoaderAndStart(std::move(ldr), req_id, opts, req,
++                                          std::move(cli), annotation);
++      },
++      weak_factory_.GetWeakPtr(), request_id, traffic_annotation);
++
+   if (network::dub::DubNetworkInterceptor::GetInstance().Intercept(
+-          loader, options, request, client)) {
++          loader, options, request, client, std::move(proceed))) {
+     return;
+   }
+ 
+diff --git a/services/network/prefetch_matching_url_loader_factory.h b/services/network/prefetch_matching_url_loader_factory.h
+index 1111111111111..2222222222222 100644
+--- a/services/network/prefetch_matching_url_loader_factory.h
++++ b/services/network/prefetch_matching_url_loader_factory.h
+@@ -12,6 +12,7 @@
+ 
+ #include "base/memory/raw_ptr.h"
+ #include "base/memory/scoped_refptr.h"
++#include "base/memory/weak_ptr.h"
+ #include "base/unguessable_token.h"
+ #include "mojo/public/cpp/bindings/pending_receiver.h"
+ #include "mojo/public/cpp/bindings/pending_remote.h"
+@@ -106,6 +107,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) PrefetchMatchingURLLoaderFactory final
+   const raw_ptr<PrefetchCache> cache_;
+   mojo::ReceiverSet<mojom::URLLoaderFactory> receivers_;
+   const bool use_matches_;
++  base::WeakPtrFactory<PrefetchMatchingURLLoaderFactory> weak_factory_{this};
+ };
+ 
+ }  // namespace network
+diff --git a/services/network/public/mojom/network_service.mojom b/services/network/public/mojom/network_service.mojom
+index 1111111111111..2222222222222 100644
+--- a/services/network/public/mojom/network_service.mojom
++++ b/services/network/public/mojom/network_service.mojom
+@@ -497,6 +497,9 @@ interface NetworkService {
+   SetDubNetworkPolicy(uint64 version,
+                       array<DubNetworkRule> rules,
+                       pending_remote<DubNetworkObserver>? observer);
++
++  // Configures optional request/response body capture for Dub network logs.
++  SetDubNetworkConfig(bool capture_bodies, uint32 max_capture_bytes);
+ };
+ 
+ struct DubNetworkRule {
+@@ -509,6 +512,20 @@ struct DubNetworkRule {
+   string redirect_url;
+   string replace_text;
+   string with_text;
++  bool is_regex;
++  bool patch_regex;
++  array<string> methods;
++  string plugin_id;
++  map<string, string> set_request_headers;
++  array<string> remove_request_headers;
++  map<string, string> set_response_headers;
++  array<string> remove_response_headers;
++  int32 delay_ms;
++  int32 jitter_ms;
++  string fail_error;
++  string callback_stage;
++  int32 callback_timeout_ms;
++  bool fail_open;
+ };
+ 
+ struct DubNetworkLogEntry {
+@@ -522,10 +539,41 @@ struct DubNetworkLogEntry {
+   int32 status;
+   bool patched;
+   string error;
++  map<string, string> request_headers;
++  map<string, string> response_headers;
++  string request_body;
++  string response_body;
++  bool body_truncated;
++};
++
++struct DubNetworkCallbackEvent {
++  string stage;
++  string rule_id;
++  string url;
++  string method;
++  int32 status;
++  map<string, string> request_headers;
++  map<string, string> response_headers;
++  string body;
++  bool body_truncated;
++  int32 timeout_ms;
++  bool fail_open;
++};
++
++struct DubNetworkCallbackDecision {
++  string action;
++  string url;
++  int32 status;
++  map<string, string> headers;
++  map<string, string> request_headers;
++  bool has_body;
++  string body;
++  string fail_error;
+ };
+ 
+ interface DubNetworkObserver {
+   OnNetworkEvent(DubNetworkLogEntry entry);
++  OnNetworkCallback(DubNetworkCallbackEvent event) => (DubNetworkCallbackDecision decision);
+ };
+ 
+ // Interface to create NetworkContexts, which can be bound from background
